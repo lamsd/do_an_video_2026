@@ -1,0 +1,45 @@
+# Secrets and local configuration
+.env
+*.env
+!*.env.example
+settings.env
+
+# Local environments, caches, and editor/agent state
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.agents/
+.codex/
+.repo/
+.DS_Store
+
+# Nested repository metadata (source is tracked as a snapshot)
+**/.git/
+
+# Generated LaTeX and document build artifacts
+*.aux
+*.acn
+*.alg
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.glo
+*.glg
+*.gls
+*.ist
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Redundant compressed archive; source files are retained separately
+Reports/New folder.rar

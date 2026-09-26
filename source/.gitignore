@@ -1,0 +1,9 @@
+settings.env
+*.env
+!settings.env.example
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.pyc
+

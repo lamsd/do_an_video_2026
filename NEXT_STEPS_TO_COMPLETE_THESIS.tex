@@ -1,0 +1,93 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{times}
+\usepackage[a4paper,top=25mm,bottom=25mm,left=28mm,right=25mm]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{hyperref}
+\usepackage{microtype}
+
+\definecolor{primaryblue}{RGB}{31,78,121}
+\hypersetup{colorlinks=true,linkcolor=primaryblue,urlcolor=primaryblue}
+\titleformat{\section}{\large\bfseries\color{primaryblue}}{\thesection.}{0.6em}{}
+\setlist[itemize]{leftmargin=1.6em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.8em,itemsep=7pt,topsep=4pt}
+\setstretch{1.2}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries\color{primaryblue} KẾ HOẠCH TIẾP THEO CỦA KHÓA LUẬN}\vspace{8pt}
+\end{center}
+
+\vspace{0.4cm}
+\hrule
+\vspace{0.4cm}
+
+\section{Mục tiêu}
+
+Hoàn thiện hệ thống phân tích transcript họp theo hướng có thể tích hợp nhiều nền tảng, vận hành ổn định, lưu vết dữ liệu và hiển thị kết quả trên dashboard. Trọng tâm là phát triển hệ thống; không đặt mục tiêu tối ưu độ chính xác model trong giai đoạn này.
+
+\section{Các hạng mục chính}
+
+\begin{enumerate}
+  \item \textbf{Hoàn thiện hệ thống lõi}
+  \begin{itemize}
+    \item Chuẩn hóa luồng tạo meeting, đồng bộ transcript, chạy analysis và hiển thị dashboard.
+    \item Bổ sung xử lý segment trùng, revision/retraction, retry job và restart worker.
+  \end{itemize}
+
+  \item \textbf{Tích hợp nhiều nền tảng meeting}
+  \begin{itemize}
+    \item Hoàn thiện Google Meet + Vexa.
+    \item Thiết kế adapter chung để lần lượt tích hợp Zoom, Microsoft Teams hoặc Jitsi khi xác minh được API/transcript contract.
+  \end{itemize}
+
+  \item \textbf{Hoàn thiện database và kiến trúc kỹ thuật}
+  \begin{itemize}
+    \item Chuẩn hóa các bảng: meeting, transcript segment, analysis run, analysis unit, prediction, aggregate, outbox event và model registry.
+    \item Bảo đảm PostgreSQL là source of truth; Valkey/Redis chỉ dùng cho queue và realtime fan-out.
+    \item Lưu version model, revision transcript và evidence để rerun, rollback và audit.
+  \end{itemize}
+
+  \item \textbf{Điều chỉnh dashboard và API}
+  \begin{itemize}
+    \item Hiển thị trạng thái meeting/analysis run, KPI, timeline, evidence, coverage và \texttt{unknown}.
+    \item Bổ sung empty state, SSE reconnect và màn hình đối chiếu model version/run khi cần.
+  \end{itemize}
+
+  \item \textbf{Triển khai và đánh giá hệ thống}
+  \begin{itemize}
+    \item Hoàn thiện Docker Compose, health checks, logging, monitoring queue/error và runbook triển khai.
+    \item Kiểm thử E2E: meeting $\rightarrow$ transcript $\rightarrow$ worker $\rightarrow$ database $\rightarrow$ dashboard.
+    \item Đo latency/reliability khi có môi trường và log chạy thực tế.
+  \end{itemize}
+
+  \item \textbf{Quản lý model}
+  \begin{itemize}
+    \item Chuẩn hóa model adapter và model registry để nạp, rerun hoặc rollback model version.
+    \item Retrain/so sánh model chỉ thực hiện khi có nhu cầu và dữ liệu phù hợp; kết quả thực nghiệm chỉ điền khi có log và protocol rõ ràng.
+  \end{itemize}
+\end{enumerate}
+
+\section{Sản phẩm dự kiến}
+
+\begin{itemize}
+  \item Hệ thống MVP chạy end-to-end với ít nhất Google Meet + Vexa.
+  \item Thiết kế adapter và tài liệu tích hợp cho các nền tảng meeting khác.
+  \item Database schema/ERD, sơ đồ kiến trúc và sequence diagram của luồng xử lý.
+  \item Dashboard hoàn chỉnh với evidence, trạng thái xử lý và cập nhật gần thời gian thực.
+  \item Bộ test, runbook triển khai và tài liệu đánh giá kỹ thuật.
+\end{itemize}
+
+\section{Giới hạn}
+
+Khóa luận không sử dụng hệ thống để chẩn đoán sức khỏe tâm thần hoặc đánh giá con người. Các số liệu model, ASR, latency và tải chỉ được công bố sau khi có kết quả chạy thực tế có thể kiểm chứng.
+
+\end{document}

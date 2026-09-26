@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meeting Intelligence Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header><h1>Meeting Intelligence</h1><p>Phân tích sắc thái transcript có bằng chứng</p></header>
+    <main>
+      <form id="meeting-form">
+        <label>Application Meeting UUID <input id="meeting-id" required placeholder="UUID do POST /v1/meetings trả về, không phải Meet code" /></label>
+        <button type="submit">Mở dashboard</button>
+        <button id="run-final" type="button">Chạy phân tích cuối</button>
+      </form>
+      <p id="status" role="status">Nhập Meeting ID để xem kết quả.</p>
+      <section id="metrics" class="cards" hidden></section>
+      <section id="timeline-section" hidden>
+        <h2>Sắc thái theo thời gian</h2><div id="timeline" class="timeline"></div>
+      </section>
+      <section id="evidence-section" hidden>
+        <h2>Evidence transcript</h2><div id="evidence"></div>
+      </section>
+    </main>
+    <template id="evidence-item">
+      <article class="evidence-item"><div class="evidence-meta"></div><p></p><small></small></article>
+    </template>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

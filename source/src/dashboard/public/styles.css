@@ -1,0 +1,12 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #101827; color: #e5e7eb; }
+body { margin: 0; } header, main { max-width: 1100px; margin: auto; padding: 1rem 1.5rem; }
+header { border-bottom: 1px solid #334155; } h1 { margin-bottom: .2rem; } header p, small, #status { color: #94a3b8; }
+form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; } label { display: grid; gap: .3rem; flex: 1; }
+input, button { border: 1px solid #475569; border-radius: .4rem; padding: .65rem; background: #1e293b; color: inherit; }
+button { cursor: pointer; background: #2563eb; border-color: #2563eb; } button:hover { background: #1d4ed8; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem; margin: 1.5rem 0; }
+.card, .evidence-item { background: #172033; border: 1px solid #334155; border-radius: .5rem; padding: 1rem; }
+.card span { color: #94a3b8; display: block; font-size: .8rem; }.card strong { font-size: 1.15rem; }
+.timeline { height: 150px; display: flex; gap: .5rem; align-items: center; border-bottom: 1px solid #64748b; padding: 1rem 0; }
+.point { width: 20px; min-height: 14px; border: 0; padding: 0; align-self: center; }.point.positive { background: #22c55e; }.point.negative { background: #ef4444; }.point.neutral { background: #94a3b8; }
+#evidence { display: grid; gap: .75rem; }.evidence-meta { font-weight: 600; }.evidence-item p { white-space: pre-wrap; }

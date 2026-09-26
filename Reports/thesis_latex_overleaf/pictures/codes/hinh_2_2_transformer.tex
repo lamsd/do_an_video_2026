@@ -1,0 +1,214 @@
+% =========================================================
+%  Hình 2.2 – Kiến trúc Transformer (Encoder-Decoder)
+%  Nguồn: Vaswani et al., "Attention Is All You Need", 2017
+%
+%  Cách dùng:  \input{pictures/codes/hinh_2_2_transformer}
+%  Tương thích: pdfLaTeX + [utf8]{inputenc} + [T5]{fontenc}
+%               + [vietnamese]{babel}   (như main.tex)
+%
+%  Thêm vào preamble main.tex (nếu chưa có):
+%    \usetikzlibrary{arrows.meta,fit,positioning,backgrounds,calc}
+% =========================================================
+
+%% ── Khai báo màu NGOÀI figure để tránh lỗi với babel ───
+\colorlet{cAttn}   {teal!18}
+\colorlet{cAttnBdr}{teal!65!black}
+\colorlet{cMask}   {red!12}
+\colorlet{cMaskBdr}{red!60!black}
+\colorlet{cFF}     {blue!10}
+\colorlet{cFFBdr}  {blue!58!black}
+\colorlet{cNorm}   {purple!10}
+\colorlet{cNormBdr}{purple!58!black}
+\colorlet{cPE}     {violet!10}
+\colorlet{cPEBdr}  {violet!62!black}
+\colorlet{cEmb}    {gray!12}
+\colorlet{cEmbBdr} {gray!62!black}
+\colorlet{cOut}    {green!11}
+\colorlet{cOutBdr} {green!58!black}
+\colorlet{cEncBdr} {blue!62!black}
+\colorlet{cDecBdr} {orange!72!black}
+\colorlet{cHdrCol} {gray!80!black}
+
+\begin{figure}[H]
+  \centering
+  \resizebox{0.88\linewidth}{!}{%
+  \begin{tikzpicture}[node distance=0.36cm]
+
+  %% ── STYLES ──────────────────────────────────────────────
+  \tikzset{
+    blk/.style   = {rounded corners=4pt, minimum width=3.0cm,
+                    minimum height=0.60cm, align=center,
+                    font=\small, inner sep=4pt},
+    attn/.style  = {blk, draw=cAttnBdr,  fill=cAttn},
+    mask/.style  = {blk, draw=cMaskBdr,  fill=cMask},
+    ff/.style    = {blk, draw=cFFBdr,    fill=cFF},
+    norm/.style  = {blk, draw=cNormBdr,  fill=cNorm,
+                    font=\small\itshape},
+    pe/.style    = {blk, draw=cPEBdr,    fill=cPE},
+    emb/.style   = {blk, draw=cEmbBdr,   fill=cEmb},
+    outblk/.style= {blk, draw=cOutBdr,   fill=cOut},
+    hdr/.style   = {fill=cHdrCol, text=white, rounded corners=3pt,
+                    minimum width=3.2cm, minimum height=0.72cm,
+                    align=center, font=\small\bfseries, inner sep=5pt},
+    arr/.style   = {-{Stealth[length=5pt,width=3.5pt]},
+                    thick, color=gray!65!black},
+    arrE/.style  = {arr, color=cEncBdr},
+    arrD/.style  = {arr, color=cDecBdr},
+    arrX/.style  = {arr, color=cEncBdr, dashed, line width=1.0pt},
+    qkv/.style   = {font=\tiny\bfseries, fill=white,
+                    inner sep=1pt, text=gray!55!black},
+    panel/.style = {rounded corners=8pt, dashed,
+                    inner sep=10pt, line width=1pt},
+    nx/.style    = {font=\footnotesize\bfseries\sffamily, text=#1}
+  }
+
+  %% ══════════════════════════════════════════════════════
+  %%  ENCODER (cột trái)
+  %% ══════════════════════════════════════════════════════
+  \node[emb]  (eEmb) {Embedding đầu vào};
+  \node[pe,   below=0.20cm of eEmb]  (ePE)
+      {Mã hóa vị trí\\{\footnotesize(Positional Encoding)}};
+
+  \node[norm, above=0.52cm of eEmb]  (eN1) {Add \& Norm};
+  \node[attn, above=0.22cm of eN1]   (eA)
+      {Multi-Head Attention\\{\footnotesize(Self-Attention)}};
+  \node[norm, above=0.22cm of eA]    (eN2) {Add \& Norm};
+  \node[ff,   above=0.22cm of eN2]   (eFF)
+      {Feed-Forward Network};
+  \node[norm, above=0.22cm of eFF]   (eN3) {Add \& Norm};
+
+  \node[nx=cEncBdr, right=0.12cm of eA] {N$\times$};
+
+  %% mũi tên encoder
+  \node[font=\small, below=0.26cm of ePE] (eIn)
+      {Đầu vào (Inputs)};
+  \draw[arrE] (eIn.north)  -- (ePE.south);
+  \draw[arrE] (ePE.north)  -- (eEmb.south);
+  \draw[arrE] (eEmb.north) -- (eN1.south);
+  \draw[arrE] (eN1.north)  -- (eA.south);
+  \draw[arrE] (eA.north)   -- (eN2.south);
+  \draw[arrE] (eN2.north)  -- (eFF.south);
+  \draw[arrE] (eFF.north)  -- (eN3.south);
+
+  %% Q K V – self-attention encoder
+  \draw[arrE] ([xshift=-0.52cm]eN1.north) --
+      ([xshift=-0.52cm]eA.south) node[qkv,midway] {Q};
+  \draw[arrE] ([xshift= 0.00cm]eN1.north) --
+      ([xshift= 0.00cm]eA.south) node[qkv,midway] {K};
+  \draw[arrE] ([xshift= 0.52cm]eN1.north) --
+      ([xshift= 0.52cm]eA.south) node[qkv,midway] {V};
+
+  %% residual – encoder (bên trái)
+  \draw[arrE] ([xshift=-1.75cm]eN1.west) -- (eN1.west);
+  \draw[arrE] ([xshift=-1.75cm]eN1.west)
+      |- ([xshift=-1.75cm, yshift=0.10cm]eA.north west)
+      -- ([xshift=-1.75cm]eN2.west) -- (eN2.west);
+  \draw[arrE] ([xshift=-1.75cm]eN2.west)
+      |- ([xshift=-1.75cm, yshift=0.10cm]eFF.north west)
+      -- ([xshift=-1.75cm]eN3.west) -- (eN3.west);
+
+  %% ══════════════════════════════════════════════════════
+  %%  DECODER (cột phải)
+  %% ══════════════════════════════════════════════════════
+  \node[emb,  right=4.6cm of eEmb]  (dEmb) {Embedding đầu ra};
+  \node[pe,   below=0.20cm of dEmb] (dPE)
+      {Mã hóa vị trí\\{\footnotesize(Positional Encoding)}};
+
+  \node[norm, above=0.52cm of dEmb] (dN1) {Add \& Norm};
+  \node[mask, above=0.22cm of dN1]  (dMA)
+      {Masked Multi-Head\\{\footnotesize Attention}};
+  \node[norm, above=0.22cm of dMA]  (dN2) {Add \& Norm};
+  \node[attn, above=0.22cm of dN2]  (dCA)
+      {Multi-Head Attention\\{\footnotesize(Cross-Attention)}};
+  \node[norm, above=0.22cm of dCA]  (dN3) {Add \& Norm};
+  \node[ff,   above=0.22cm of dN3]  (dFF) {Feed-Forward Network};
+  \node[norm, above=0.22cm of dFF]  (dN4) {Add \& Norm};
+
+  \node[nx=cDecBdr, right=0.12cm of dCA] {N$\times$};
+
+  %% đầu ra
+  \node[outblk, above=0.52cm of dN4]   (dLin)     {Linear};
+  \node[outblk, above=0.22cm of dLin]  (dSoft)    {Softmax};
+  \node[emb,    above=0.22cm of dSoft] (dOutProb)
+      {Xác suất đầu ra};
+
+  %% mũi tên decoder
+  \node[font=\small, below=0.26cm of dPE] (dIn)
+      {Đầu ra (Outputs shifted right)};
+  \draw[arrD] (dIn.north)   -- (dPE.south);
+  \draw[arrD] (dPE.north)   -- (dEmb.south);
+  \draw[arrD] (dEmb.north)  -- (dN1.south);
+  \draw[arrD] (dN1.north)   -- (dMA.south);
+  \draw[arrD] (dMA.north)   -- (dN2.south);
+  \draw[arrD] (dN2.north)   -- (dCA.south);
+  \draw[arrD] (dCA.north)   -- (dN3.south);
+  \draw[arrD] (dN3.north)   -- (dFF.south);
+  \draw[arrD] (dFF.north)   -- (dN4.south);
+  \draw[arrD] (dN4.north)   -- (dLin.south);
+  \draw[arrD] (dLin.north)  -- (dSoft.south);
+  \draw[arrD] (dSoft.north) -- (dOutProb.south);
+
+  %% Q K V – masked self-attention decoder
+  \draw[arrD] ([xshift=-0.52cm]dN1.north) --
+      ([xshift=-0.52cm]dMA.south) node[qkv,midway] {Q};
+  \draw[arrD] ([xshift= 0.00cm]dN1.north) --
+      ([xshift= 0.00cm]dMA.south) node[qkv,midway] {K};
+  \draw[arrD] ([xshift= 0.52cm]dN1.north) --
+      ([xshift= 0.52cm]dMA.south) node[qkv,midway] {V};
+
+  %% Q – cross-attention (từ decoder)
+  \draw[arrD] ([xshift=-0.52cm]dN2.north) --
+      ([xshift=-0.52cm]dCA.south) node[qkv,midway] {Q};
+
+  %% residual – decoder (bên phải)
+  \draw[arrD] ([xshift=1.75cm]dN1.east) -- (dN1.east);
+  \draw[arrD] ([xshift=1.75cm]dN1.east)
+      |- ([xshift=1.75cm, yshift=0.10cm]dMA.north east)
+      -- ([xshift=1.75cm]dN2.east) -- (dN2.east);
+  \draw[arrD] ([xshift=1.75cm]dN2.east)
+      |- ([xshift=1.75cm, yshift=0.10cm]dCA.north east)
+      -- ([xshift=1.75cm]dN3.east) -- (dN3.east);
+  \draw[arrD] ([xshift=1.75cm]dN3.east)
+      |- ([xshift=1.75cm, yshift=0.10cm]dFF.north east)
+      -- ([xshift=1.75cm]dN4.east) -- (dN4.east);
+
+  %% ── Cross-Attention: K và V từ Encoder ─────────────
+  \coordinate (bridgeY) at ([yshift=1.0cm]eN3.north);
+
+  \draw[arrX] (eN3.north) -- (bridgeY)
+      -- ([yshift=1.0cm, xshift=-0.28cm]dCA.north west)
+      |- ([xshift= 0.00cm]dCA.south)
+      node[qkv, pos=0.93] {K};
+
+  \draw[arrX] ([xshift=0.35cm]eN3.north)
+      -- ([xshift=0.35cm]bridgeY)
+      -- ([yshift=1.0cm, xshift=0.18cm]dCA.north west)
+      |- ([xshift= 0.52cm]dCA.south)
+      node[qkv, pos=0.93] {V};
+
+  \node[font=\tiny\itshape, text=cEncBdr,
+        above=0.04cm of bridgeY, xshift=0.5cm]
+      {K, V từ Encoder};
+
+  %% ══════════════════════════════════════════════════════
+  %%  KHUNG BAO
+  %% ══════════════════════════════════════════════════════
+  \begin{scope}[on background layer]
+    \node[panel, draw=cEncBdr, fill=cEncBdr!6,
+          fit=(eEmb)(ePE)(eN1)(eA)(eN2)(eFF)(eN3)] (encPanel) {};
+    \node[panel, draw=cDecBdr, fill=cDecBdr!5,
+          fit=(dEmb)(dPE)(dN1)(dMA)(dN2)(dCA)(dN3)(dFF)(dN4)] (decPanel) {};
+  \end{scope}
+
+  \node[hdr, fill=cEncBdr, above=0.16cm of encPanel.north]
+      {Bộ mã hóa (Encoder)};
+  \node[hdr, fill=cDecBdr, above=0.16cm of decPanel.north]
+      {Bộ giải mã (Decoder)};
+
+  \end{tikzpicture}%
+  }% end resizebox
+  \caption{Kiến trúc Transformer (Encoder-Decoder).
+           Nguồn: Vaswani et al.,
+           \textit{Attention Is All You Need}, NeurIPS 2017.}
+  \label{fig:transformer}
+\end{figure}

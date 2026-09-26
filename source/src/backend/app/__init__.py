@@ -1,0 +1,1 @@
+"""Meeting Intelligence application package."""
