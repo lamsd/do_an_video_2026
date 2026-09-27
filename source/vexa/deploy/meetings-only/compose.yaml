@@ -1,0 +1,61 @@
+name: vexa-meetings
+
+# Minimal self-host deployment for Meeting Intelligence.
+# It reuses only upstream services required for bot lifecycle and transcripts.
+services:
+  postgres:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: postgres
+  redis:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: redis
+  minio:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: minio
+  minio-init:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: minio-init
+  admin-api:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: admin-api
+    environment:
+      VEXA_FLOWS_API_URL: ""
+      VEXA_FLOWS_API_KEY: ""
+  runtime:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: runtime
+    environment:
+      # No agent workloads are dispatched by this deployment.
+      AGENT_IMAGE: ""
+      AGENT_WORKER_IMAGE: ""
+      VEXA_AGENT_SRC_MOUNT: ""
+  meeting-api:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: meeting-api
+    environment:
+      VEXA_FLOWS_API_URL: ""
+      VEXA_FLOWS_API_KEY: ""
+      RECORDING_ENABLED: "false"
+  gateway:
+    extends:
+      file: ../compose/docker-compose.yml
+      service: gateway
+    environment:
+      # Empty values are the upstream no-agent/no-MCP capability signals.
+      AGENT_API_URL: ""
+      MCP_URL: ""
+
+networks:
+  vexa:
+
+volumes:
+  redis-data:
+  postgres-data:
+  minio-data:

@@ -1,0 +1,18 @@
+\chapter{Kiến Trúc Backend và Tích Hợp Hệ Thống}
+\label{chap:backend}
+
+\section{Kiến trúc MVP}
+MVP dùng kiến trúc event-driven có nguồn dữ liệu chính là PostgreSQL:
+\begin{center}
+Vexa $\rightarrow$ FastAPI backend $\rightarrow$ PostgreSQL/outbox $\rightarrow$ Valkey Stream $\rightarrow$ sentiment worker $\rightarrow$ aggregate/outbox $\rightarrow$ SSE $\rightarrow$ dashboard.
+\end{center}
+Backend tiếp nhận và reconcile transcript; browser không gọi Vexa trực tiếp và không lộ Vexa API key. Valkey/Redis chỉ phục vụ queue và fan-out, không thay PostgreSQL làm source of truth. Worker tách FastAPI để quá trình xử lý không chặn REST/SSE. Điểm tích hợp mô hình được đóng gói qua classifier adapter; vì vậy thay model không làm thay đổi luồng dữ liệu hay dashboard.
+
+\section{Persistence, idempotency và revision}
+Các thực thể chính gồm meeting, transcript segment, analysis run, analysis unit, prediction, aggregate window và outbox event. Idempotency key là \texttt{(meeting\_id, kind, source\_revision, model\_version)}. Segment được upsert theo khóa nguồn; thay đổi text, speaker hoặc thời gian tạo revision mới. Kết quả gắn evidence và version để có thể audit, còn kết quả lỗi thời được supersede.
+
+\section{Luồng phân tích}
+Khi final segment đến, backend phát sự kiện bền vững qua outbox. Worker đọc queue, chạy quality gate, xây analysis unit và gọi classifier adapter; kết quả bao gồm label, điểm confidence nếu adapter cung cấp, reason, model version và processing latency. Sau khi aggregate cập nhật, sự kiện \texttt{analysis.sentiment.updated} được phát qua SSE. Reconcile REST là fallback; WebSocket Vexa là giai đoạn kế tiếp khi source contract đã được kiểm chứng.
+
+\section{Phạm vi tích hợp}
+Tích hợp đã kiểm chứng là Google Meet kết hợp Vexa trong môi trường local. Zoom, Teams, Jitsi, capture audio trực tiếp, gateway nhiều microservice, JWT/OAuth, ONNX quantization, dynamic batching và auto-alert không được mô tả như chức năng đã triển khai. Chúng là các lựa chọn kiến trúc chỉ được thực hiện sau khi có yêu cầu, consent và benchmark tương ứng.

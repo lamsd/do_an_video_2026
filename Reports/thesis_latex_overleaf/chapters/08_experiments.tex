@@ -1,0 +1,44 @@
+\chapter{Kết Quả Kiểm Chứng Ứng Dụng và Giới Hạn Thực Nghiệm}
+\label{chap:experiments}
+
+\section{Phân biệt bằng chứng và kế hoạch đánh giá}
+Chương này chỉ báo cáo bằng chứng đã chạy trên ứng dụng MVP. Một số notebook model và dataset đã tồn tại trong dự án, nhưng chúng thuộc bài toán phân loại trầm cảm nhị phân trên văn bản ngoài domain họp và không tạo ra model serving cho ứng dụng. Chúng không thỏa protocol đánh giá sentiment ba lớp theo meeting nên không được dùng làm kết quả thực nghiệm. Chưa có benchmark sentiment phù hợp, ASR WER/CER, load test, độ trễ percentile hay UX; vì vậy không công bố F1, AUC, recall hoặc SLA chưa được đo.
+
+\section{Mẫu ghi nhận kết quả kiểm chứng ứng dụng}
+\begin{table}[H]\centering
+\caption{Mẫu bằng chứng integration MVP (chưa điền giá trị thực nghiệm)}
+\label{tab:mvp-results-template}
+\begin{tabularx}{\linewidth}{lX}
+\toprule Hạng mục & Kết quả\\ \midrule
+Ngày và môi trường chạy & \hspace{6cm}\\
+Transcript persistence & \hspace{6cm}\\
+Final analysis run & \hspace{6cm}\\
+Analysis unit & \hspace{6cm}\\
+Unit accepted và coverage & \hspace{6cm}\\
+Runtime model/version & \hspace{6cm}\\
+Dashboard (KPI, timeline, evidence, SSE) & \hspace{6cm}\\
+\bottomrule
+\end{tabularx}\end{table}
+
+Các ô trong Bảng~\ref{tab:mvp-results-template} được chủ động để trống. Chỉ điền sau khi có log chạy, phiên bản source/model và evidence tương ứng. Khi được điền, bảng chỉ chứng minh ingest, quality gate, lifecycle, persistence, cơ chế adapter và delivery realtime của pipeline; nó không thay thế đánh giá chất lượng sentiment, ASR hay sàng lọc trầm cảm.
+
+\section{Mẫu so sánh nhiều model}
+\begin{table}[H]\centering
+\caption{Mẫu kết quả so sánh model sentiment (chưa điền giá trị thực nghiệm)}
+\label{tab:model-comparison-template}
+\begin{tabularx}{\linewidth}{lXXXX}
+\toprule
+Model & Dataset/version & Macro-F1 & Coverage & P95 inference\\ \midrule
+TF--IDF + Logistic Regression & & & & \\
+PhoBERT-base & & & & \\
+PhoBERT-large & & & & \\
+Model khác (nếu có) & & & & \\
+\bottomrule
+\end{tabularx}\end{table}
+Mỗi dòng phải dùng cùng protocol split, cùng tập test đã khóa và cùng quality gate. Ngoài các cột trong bảng, báo cáo hoàn chỉnh cần có precision/recall/F1 theo lớp, confusion matrix, calibration, hardware, batch size, seed và error analysis.
+
+\section{Định hướng thực nghiệm và tối ưu hóa}
+Khi cần đánh giá hoặc cải thiện model, phải công bố dataset manifest, số meeting train/validation/test, phân bố lớp, agreement, macro-F1, metric theo lớp, confusion matrix, calibration, coverage và inference P50/P95. Đối với ASR, cần audio ground truth và WER/CER theo tiếng Việt, noise, echo, song và code-switching. Đối với hệ thống, cần đo $T_{capture}$, $T_{analysis}$, $T_{e2e}$, throughput, queue lag, error rate và resource profile. Đối với UX, cần protocol, số participant, task, metric và limitations. Đây là protocol lý thuyết, chưa phải một experiment thành công của khóa luận.
+
+\section{Phân tích hạn chế}
+Không có coverage, accuracy hay F1 nào được điền ở giai đoạn hiện tại. Rule baseline chỉ hữu ích để kiểm tra integration; nó không thay thế model đã huấn luyện. Kết quả accuracy cao từ một notebook phân loại trầm cảm nhị phân cũng không được ngoại suy sang sentiment transcript họp, do khác task và nguy cơ leakage từ random split. Các transcript ngắn, bị sửa, multilingual hoặc không đủ điều kiện phải tiếp tục được biểu diễn là unknown hoặc excluded cùng lý do, thay vì suy luận quá mức.

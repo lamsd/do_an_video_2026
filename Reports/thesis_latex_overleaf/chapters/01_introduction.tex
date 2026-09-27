@@ -1,0 +1,27 @@
+\chapter{Giới Thiệu}
+\label{chap:intro}
+
+\section{Bối cảnh và tính cấp thiết của nghiên cứu}
+Transcript do ASR tạo ra giúp nội dung họp trực tuyến trở nên có thể tìm kiếm và phân tích. Tuy nhiên, transcript tiếng Việt trong bối cảnh này thường có lỗi nhận dạng, đoạn phát ngôn rất ngắn, tiếng ồn và code-switching. Vì vậy, một hệ thống phân tích đáng tin cậy không chỉ là gọi mô hình phân loại, mà còn phải kiểm soát chất lượng dữ liệu, lưu vết phiên bản và cho người dùng xem lại bằng chứng.
+
+Sắc thái tích cực, trung tính hoặc tiêu cực của một đoạn transcript không tương đương với tình trạng sức khỏe tâm thần của người nói. WHO mô tả trầm cảm là trạng thái kéo dài với tiêu chí lâm sàng, không thể suy ra từ biến động cảm xúc thông thường \cite{who2023}. PHQ-9 cũng là công cụ tự báo cáo theo một khoảng thời gian xác định \cite{kroenke2001}. Do đó, khóa luận giới hạn ở bài toán phân tích sentiment của nội dung transcript, không phát hiện trầm cảm, không xếp hạng con người và không hỗ trợ quyết định về học tập hay việc làm.
+
+\section{Vấn đề nghiên cứu}
+Khóa luận tập trung vào bốn vấn đề ở mức thiết kế và hiện thực ứng dụng: (i) lọc và định tuyến transcript nhiễu trước khi gọi bộ phân loại; (ii) thiết kế adapter để thay thế mô hình mà không làm thay đổi hợp đồng dữ liệu; (iii) bảo toàn lịch sử transcript và kết quả phân tích trong kiến trúc cập nhật gần thời gian thực; và (iv) trình bày confidence, coverage và evidence để hạn chế diễn giải quá mức.
+
+\section{Mục tiêu và câu hỏi nghiên cứu}
+\textbf{Mục tiêu tổng quát} là xây dựng và kiểm chứng ứng dụng có khả năng tích hợp bộ phân loại sentiment trên transcript tiếng Việt trong họp trực tuyến, có truy vết và bảo vệ quyền riêng tư. Khóa luận không đặt mục tiêu huấn luyện lại hoặc chứng minh chất lượng một mô hình học máy.
+
+\textbf{Câu hỏi nghiên cứu:}
+\begin{enumerate}
+  \item Pipeline có loại, lưu vết lý do và bảo toàn revision của transcript không đủ điều kiện trước khi gọi bộ phân loại hay không?
+  \item Hợp đồng adapter có cho phép thay thế bộ phân loại hiện tại bằng PhoBERT hoặc model artifact phù hợp mà không thay đổi API, persistence và dashboard hay không?
+  \item Kiến trúc event-driven có hoàn tất ingest, analysis lifecycle, persistence và cập nhật dashboard từ final segment hay không?
+  \item Evidence, confidence và coverage trên dashboard được biểu diễn như thế nào để tránh coi output là kết luận về con người?
+\end{enumerate}
+
+\section{Phạm vi và giới hạn}
+MVP đã kiểm chứng trong phạm vi Google Meet kết hợp Vexa ở môi trường cục bộ. Hệ thống xử lý transcript theo speaker và timestamp; chỉ final segment đủ điều kiện mới được gửi tới adapter. Runtime đang chạy là rule baseline có tính xác định. Các notebook model sẵn có trong thư mục dự án phục vụ tham khảo/khám phá nhưng không được triển khai thành artifact serving trong MVP; đặc biệt các notebook phân loại trầm cảm nhị phân không tương đương bài toán sentiment ba lớp của ứng dụng. Các benchmark PhoBERT, đo WER ASR, latency percentile, Kubernetes, HA và đánh giá người dùng chỉ là lý thuyết hoặc hướng phát triển.
+
+\section{Cấu trúc khóa luận}
+Chương~\ref{chap:literature} trình bày cơ sở lý thuyết; Chương~\ref{chap:data} mô tả dữ liệu và pipeline; Chương~\ref{chap:model} nêu mô hình và protocol đánh giá; các Chương~\ref{chap:backend}--\ref{chap:infra} mô tả MVP; Chương~\ref{chap:experiments} báo cáo kiểm chứng tích hợp và kế hoạch đánh giá; Chương~\ref{chap:ethics} trình bày bảo vệ dữ liệu và giới hạn; Chương~\ref{chap:conclusion} kết luận.

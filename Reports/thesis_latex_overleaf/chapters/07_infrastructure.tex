@@ -1,0 +1,11 @@
+\chapter{Hạ Tầng và Vận Hành}
+\label{chap:infra}
+
+\section{Triển khai cục bộ đã kiểm chứng}
+Môi trường Docker Compose gồm backend cổng 8088 (REST/SSE), sentiment worker, PostgreSQL lưu dữ liệu ứng dụng, Redis/Valkey cho Stream/PubSub và dashboard cổng 3000 với Nginx reverse proxy \texttt{/api}. Mạng Docker ngoài kết nối tới Vexa gateway. PostgreSQL/Valkey có health check; backend có health endpoint và worker phục hồi analysis run đang chờ.
+
+\section{Tách implementation và roadmap}
+File \texttt{compose.yaml} mô tả topology CPU local. Worker hiện không đóng gói artifact PhoBERT hay model học máy đã huấn luyện; GPU chỉ là lựa chọn khi tích hợp model tương lai. Kubernetes, TimescaleDB, cloud deployment, CI/CD, multi-region, HA, observability stack và 20 phiên đồng thời là kiến trúc production đề xuất; chúng chỉ được claim sau khi có manifest, deployment log và load test.
+
+\section{Vận hành có trách nhiệm}
+Secrets không được đưa vào source code hoặc log. Khi triển khai, cần bổ sung TLS, phân quyền owner/workspace, backup/restore đã kiểm thử, retention/delete workflow và giám sát queue lag, lỗi API, latency. Các ngưỡng SLO, RTO/RPO và cấu hình autoscaling phải là mục tiêu được đo, không phải số liệu mặc định.

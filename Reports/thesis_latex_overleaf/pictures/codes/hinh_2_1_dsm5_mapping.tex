@@ -1,0 +1,127 @@
+% =========================================================
+%  Hình 2.1 – Sơ đồ ánh xạ DSM-5 → đặc trưng ngôn ngữ học
+%
+%  Cách dùng:  \input{pictures/codes/hinh_2_1_dsm5_mapping}
+%
+%  Tương thích: pdfLaTeX + [utf8]{inputenc} + [T5]{fontenc}
+%               + [vietnamese]{babel}   (như main.tex)
+%
+%  Preamble main.tex đã có sẵn:
+%    \usepackage{tikz}          ✓
+%    \usepackage{graphicx}      ✓
+%    \usepackage{float}         ✓  → cho phép [H]
+%  Chỉ cần thêm vào preamble:
+%    \usetikzlibrary{arrows.meta,fit,positioning,backgrounds,calc}
+% =========================================================
+
+\begin{figure}[H]          % [H] = đặt ĐÚNG chỗ \input, không tạo trang mới
+  \centering
+  \resizebox{\linewidth}{!}{%   % tự động scale theo chiều rộng cột văn bản
+  \begin{tikzpicture}[
+    node distance = 0.42cm and 0.6cm,
+  ]
+
+  %% ── STYLES ─────────────────────────────────────────────
+  \tikzset{
+    dsm/.style  = {draw=blue!55!black, fill=blue!10,
+                   rounded corners=4pt, text width=3.6cm,
+                   align=center, font=\small,
+                   inner sep=5pt, minimum height=0.74cm},
+    feat/.style = {draw=green!50!black, fill=green!12,
+                   rounded corners=4pt, text width=3.9cm,
+                   align=center, font=\small\bfseries,
+                   inner sep=5pt, minimum height=0.90cm},
+    mod/.style  = {draw=orange!70!black, fill=orange!12,
+                   rounded corners=6pt, text width=3.8cm,
+                   align=center, font=\small\bfseries,
+                   inner sep=5pt, minimum height=0.94cm},
+    hdr/.style  = {fill=gray!78!black, text=white,
+                   rounded corners=3pt, text width=3.9cm,
+                   align=center, font=\small\bfseries,
+                   inner sep=6pt, minimum height=0.90cm},
+    arr/.style  = {-{Stealth[length=5.5pt,width=4pt]},
+                   thick, color=gray!70!black},
+    grp/.style  = {draw=gray!45, dashed, rounded corners=7pt,
+                   fill=gray!5, inner sep=9pt, line width=0.8pt}
+  }
+
+  %% ════════════════════════════════════════════════════════
+  %% CỘT 1 – 9 tiêu chí DSM-5
+  %% ════════════════════════════════════════════════════════
+  \node[hdr] (h1) {Tiêu chí DSM-5\\(Trầm cảm chủ yếu)};
+
+  \node[dsm, below=0.30cm of h1] (d1) {A1. Khí sắc trầm cảm};
+  \node[dsm, below=of d1]        (d2) {A2. Mất hứng thú / thích thú};
+  \node[dsm, below=of d2]        (d3) {A3. Thay đổi cân nặng / ăn uống};
+  \node[dsm, below=of d3]        (d4) {A4. Rối loạn giấc ngủ};
+  \node[dsm, below=of d4]        (d5) {A5. Thay đổi tâm thần vận động};
+  \node[dsm, below=of d5]        (d6) {A6. Mệt mỏi / mất năng lượng};
+  \node[dsm, below=of d6]        (d7) {A7. Cảm giác vô dụng / tội lỗi};
+  \node[dsm, below=of d7]        (d8) {A8. Giảm tập trung / quyết định};
+  \node[dsm, below=of d8]        (d9) {A9. Ý tưởng / hành vi tự tử};
+
+  %% ════════════════════════════════════════════════════════
+  %% CỘT 2 – Nhóm đặc trưng ngôn ngữ học
+  %% ════════════════════════════════════════════════════════
+  \node[hdr, right=2.9cm of h1] (h2) {Nhóm đặc trưng\\ngôn ngữ học};
+
+  \node[feat] (f1) at ([xshift=7.2cm]{$(d1)!0.5!(d2)$})
+      {F1. Đặc trưng cảm xúc\\{\footnotesize(Affective features)}};
+  \node[feat] (f2) at ([xshift=7.2cm]{$(d3)!0.5!(d4)$})
+      {F2. Đặc trưng từ vựng\\{\footnotesize(Lexical features)}};
+  \node[feat] (f3) at ([xshift=7.2cm]{$(d5)!0.5!(d6)$})
+      {F3. Đặc trưng cú pháp\\{\footnotesize(Syntactic features)}};
+  \node[feat] (f4) at ([xshift=7.2cm]{$(d7)!0.5!(d8)$})
+      {F4. Đặc trưng ngữ dụng\\{\footnotesize(Pragmatic features)}};
+  \node[feat] (f5) at ([xshift=7.2cm] d9)
+      {F5. Đặc trưng nguy cơ\\{\footnotesize(Risk-signal features)}};
+
+  %% ════════════════════════════════════════════════════════
+  %% CỘT 3 – Module phân tích
+  %% ════════════════════════════════════════════════════════
+  \node[hdr, right=2.9cm of h2] (h3) {Module phân tích};
+
+  \node[mod] (m1) at ([xshift=7.2cm]{$(f1)!0.5!(f2)$})
+      {M1. Phân tích cảm xúc\\{\footnotesize(Sentiment Analysis)}};
+  \node[mod] (m2) at ([xshift=7.2cm] f3)
+      {M2. Phân tích cú pháp\\{\footnotesize(Syntactic Parsing)}};
+  \node[mod] (m3) at ([xshift=7.2cm]{$(f4)!0.5!(f5)$})
+      {M3. Phát hiện nguy cơ\\{\footnotesize(Risk Detection)}};
+
+  %% ════════════════════════════════════════════════════════
+  %% MŨI TÊN: DSM → Feature
+  %% ════════════════════════════════════════════════════════
+  \draw[arr] (d1.east) --++(0.40,0) |- (f1.west);
+  \draw[arr] (d2.east) --++(0.40,0) |- (f1.west);
+  \draw[arr] (d3.east) --++(0.40,0) |- (f2.west);
+  \draw[arr] (d4.east) --++(0.40,0) |- (f2.west);
+  \draw[arr] (d5.east) --++(0.40,0) |- (f3.west);
+  \draw[arr] (d6.east) --++(0.40,0) |- (f3.west);
+  \draw[arr] (d7.east) --++(0.40,0) |- (f4.west);
+  \draw[arr] (d8.east) --++(0.40,0) |- (f4.west);
+  \draw[arr] (d9.east)              -- (f5.west);
+
+  %% ════════════════════════════════════════════════════════
+  %% MŨI TÊN: Feature → Module
+  %% ════════════════════════════════════════════════════════
+  \draw[arr] (f1.east) --++(0.40,0) |- (m1.west);
+  \draw[arr] (f2.east) --++(0.40,0) |- (m1.west);
+  \draw[arr] (f3.east)              -- (m2.west);
+  \draw[arr] (f4.east) --++(0.40,0) |- (m3.west);
+  \draw[arr] (f5.east) --++(0.40,0) |- (m3.west);
+
+  %% ════════════════════════════════════════════════════════
+  %% KHUNG BAO
+  %% ════════════════════════════════════════════════════════
+  \begin{scope}[on background layer]
+    \node[grp, fit=(h1)(d1)(d2)(d3)(d4)(d5)(d6)(d7)(d8)(d9)] {};
+    \node[grp, fit=(h2)(f1)(f2)(f3)(f4)(f5)] {};
+    \node[grp, fit=(h3)(m1)(m2)(m3)] {};
+  \end{scope}
+
+  \end{tikzpicture}%
+  }% end \resizebox
+  \caption{Sơ đồ ánh xạ từ 9 tiêu chí DSM-5 sang nhóm đặc trưng ngôn ngữ học
+           và module phân tích tương ứng.}
+  \label{fig:dsm5-mapping}
+\end{figure}

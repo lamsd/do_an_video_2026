@@ -1,0 +1,22 @@
+\chapter{Kết Luận và Hướng Phát Triển}
+\label{chap:conclusion}
+
+\section{Kết luận}
+Khóa luận trình bày thiết kế và hiện thực ứng dụng MVP cho ingest transcript, quality gate, analysis lifecycle, classifier adapter, persistence, realtime delivery và evidence dashboard. PostgreSQL giữ dữ liệu có version; worker tách API; outbox và SSE hỗ trợ cập nhật có thể truy vết. Các bảng kết quả được để trống có chủ đích để chỉ điền sau các run build và thực nghiệm có log/evidence tương ứng.
+
+MVP không chứng minh chất lượng sentiment của PhoBERT hay các notebook model sẵn có, WER ASR, độ trễ percentile, khả năng chịu tải hay sàng lọc trầm cảm. Theo đó, kết luận của khóa luận chỉ giới hạn ở tính khả thi về mặt tích hợp và thiết kế kiểm toán cho transcript analysis.
+
+\section{Hạn chế}
+Runtime hiện là rule baseline; chưa có model artifact sentiment phù hợp được đóng gói để serving, benchmark đa mô hình, user study hoặc legal review. Các notebook hiện có là thử nghiệm phân loại trầm cảm nhị phân ngoài domain họp, nên không được coi là bằng chứng của ứng dụng sentiment. Tích hợp được xác nhận là Google Meet + Vexa local; các platform và hạ tầng khác mới ở mức thiết kế.
+
+\section{Hướng phát triển}
+\begin{enumerate}
+\item Chuẩn hóa model artifact và adapter contract trước khi tích hợp model thay cho baseline.
+\item Khi cần nâng chất lượng, tạo dataset sentiment đúng domain, đánh giá theo meeting và không tái sử dụng test set để tuning.
+\item Tối ưu quality gate, context window, threshold, batch size/max length và calibration; version hóa mọi thay đổi.
+\item Bổ sung model registry, shadow run và đo ASR/system/UX trước khi claim hiệu năng.
+\item Không mở rộng sang clinical screening nếu chưa có protocol y đức, giám sát lâm sàng và quy trình xử lý nguy cơ riêng.
+\end{enumerate}
+
+\section{Lời kết}
+Một dashboard có trách nhiệm cần cho thấy bằng chứng và sự không chắc chắn, thay vì tạo kết luận về con người. Đây là nền tảng để phát triển nghiên cứu NLP tiếng Việt trong họp trực tuyến theo hướng hữu ích, minh bạch và tôn trọng quyền riêng tư.

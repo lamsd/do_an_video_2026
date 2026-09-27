@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meeting Intelligence Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header><h1>Meeting Intelligence</h1><p>Phân tích sắc thái transcript có bằng chứng</p></header>
+    <main>
+      <form id="meeting-form">
+        <label>Application Meeting UUID <input id="meeting-id" placeholder="Tự chọn meeting mới nhất; chỉ nhập khi muốn mở meeting cũ" /></label>
+        <button type="submit">Mở dashboard</button>
+        <button id="run-final" type="button">Chạy phân tích cuối</button>
+      </form>
+      <p id="status" role="status">Đang tìm meeting mới nhất…</p>
+      <p id="active-meeting" class="active-meeting" hidden></p>
+      <section id="transcript-section" hidden>
+        <h2>Transcript trực tiếp</h2><p id="transcript-meta"></p><div id="transcript"></div>
+      </section>
+      <section id="metrics" class="cards" hidden></section>
+      <section id="timeline-section" hidden>
+        <h2>Sắc thái theo thời gian</h2><div id="timeline" class="timeline"></div>
+      </section>
+      <section id="evidence-section" hidden>
+        <h2>Evidence transcript</h2><div id="evidence"></div>
+      </section>
+    </main>
+    <template id="evidence-item">
+      <article class="evidence-item"><div class="evidence-meta"></div><p></p><small></small></article>
+    </template>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

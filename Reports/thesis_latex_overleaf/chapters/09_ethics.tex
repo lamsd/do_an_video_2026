@@ -1,0 +1,11 @@
+\chapter{Quyền Riêng Tư, Đạo Đức và An Toàn}
+\label{chap:ethics}
+
+\section{Nguyên tắc thiết kế}
+Phân tích transcript họp đòi hỏi consent cụ thể cho mục đích phân tích; consent họp chung không thay thế consent nghiên cứu y tế. Hệ thống giới hạn mục đích ở phân tích nội dung transcript, không dùng để employment/education ranking, kỷ luật hay ra quyết định tự động. Data minimization nghĩa là không giữ audio/video thô khi không cần; raw transcript và evidence phải có retention/deletion policy.
+
+\section{Kiểm soát và truy vết}
+Khi triển khai, dữ liệu cần được bảo vệ bằng TLS, authorization theo owner/workspace, quản lý secret, và audit truy cập/feedback. Không log secret hoặc raw transcript không cần thiết. Mọi prediction phải có evidence gồm segment ID, revision, timestamp, preprocessing và model version để có thể kiểm tra hoặc xóa theo policy.
+
+\section{Giới hạn sử dụng}
+Confidence không phải xác suất một người có vấn đề tâm lý; low coverage và unknown là output hợp lệ. Dashboard không được biến kết quả thành cảnh báo cá nhân. Hệ thống được thiết kế để hỗ trợ các nguyên tắc privacy-by-design \cite{cavoukian2011}, không tuyên bố đã tuân thủ GDPR, EU AI Act hoặc quy định Việt Nam nếu chưa có legal review/DPIA. Nếu nghiên cứu mở rộng sang self-harm hoặc suicidality, phải dừng trước khi có ethics approval, clinical supervisor và crisis-response protocol; keyword alert không phải can thiệp tự động.

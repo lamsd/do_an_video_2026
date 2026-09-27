@@ -1,0 +1,9 @@
+APP_ENV=development
+APP_HOST=0.0.0.0
+APP_PORT=8088
+POSTGRES_PASSWORD=change-me
+DATABASE_URL=postgresql+asyncpg://meeting:change-me@postgres:5432/meeting
+VEXA_API_BASE=http://gateway:8000
+VEXA_API_KEY=
+VEXA_WEBHOOK_SECRET=
+POLL_INTERVAL_SECONDS=3

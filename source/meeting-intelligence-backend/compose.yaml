@@ -1,0 +1,75 @@
+services:
+  backend:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend, vexa]
+    restart: unless-stopped
+
+  worker:
+    build: .
+    env_file: .env
+    command: uv run python -m app.workers.sentiment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:3000:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_started
+    networks: [backend]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: meeting
+      POSTGRES_USER: meeting
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meeting -d meeting"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes: [backend-postgres:/var/lib/postgresql/data]
+    networks: [backend]
+    restart: unless-stopped
+
+  redis:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes: [backend-redis:/data]
+    networks: [backend]
+    restart: unless-stopped
+
+networks:
+  backend:
+  vexa:
+    external: true
+    name: vexa-v012_vexa
+
+volumes:
+  backend-postgres:
+  backend-redis:

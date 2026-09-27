@@ -1,0 +1,143 @@
+% chapters/appendix.tex
+\chapter{Giải Thích Chi Tiết Tài Liệu Tham Khảo}
+\label{app:references}
+
+\begin{longtable}{>{\bfseries}p{2.5cm} p{3.5cm} p{7cm}}
+\toprule
+\textbf{Tài liệu} & \textbf{Lý do chọn} & \textbf{Đóng góp cho nghiên cứu} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+{[6] DSM-5}       & Gold standard quốc tế cho chẩn đoán tâm thần          & Định nghĩa nhãn dữ liệu, ánh xạ 9 triệu chứng → đặc trưng ngôn ngữ \\[6pt]
+{[7] PHQ-9}       & Công cụ sàng lọc được xác nhận tiếng Việt             & Cơ sở gán nhãn nhị phân, ngưỡng phân loại \\[6pt]
+{[8] Vaswani 2017}& Foundation kiến trúc mọi mô hình BERT-based           & Hiểu cơ chế attention, giải thích nền tảng kỹ thuật \\[6pt]
+{[9] BERT}        & Breakthrough NLP, pre-training paradigm               & Hiểu fine-tuning, so sánh baseline \\[6pt]
+{[10] PhoBERT}    & SOTA tiếng Việt, open-source                          & Mô hình cốt lõi hệ thống \\[6pt]
+{[11] Yates 2017} & RSDD benchmark, pioneering work                       & Baseline methodology, linguistic features \\[6pt]
+{[12] Trotzek}    & Systematic review NLP depression methods              & Linguistic markers, model comparison methodology \\[6pt]
+{[13] Tuyền 2025} & Tiên phong depression detection tiếng Việt            & Foundation trực tiếp, domain gap analysis \\[6pt]
+{[14] Whisper}    & SOTA ASR đa ngôn ngữ, self-hostable                   & Module ASR trong pipeline \\[6pt]
+{[15] VnCoreNLP}  & Toolkit NLP tiếng Việt đầy đủ nhất                    & Word segmentation, tiền xử lý \\[6pt]
+{[16] Cummins}    & Systematic review acoustic features và trầm cảm       & Cơ sở lý thuyết (phần so sánh với multimodal) \\[6pt]
+{[19] GDPR}       & Quy định pháp lý EU về dữ liệu cá nhân               & Thiết kế privacy, consent management \\[6pt]
+{[20] Luật ANMVN} & Quy định pháp lý Việt Nam                             & Self-hosted option, data sovereignty requirement \\[6pt]
+{[21] EU AI Act}  & Khung quy định AI nguy cơ cao                         & Nguyên tắc đạo đức AI cho hệ thống y tế \\[6pt]
+{[22] Privacy by Design} & Framework thiết kế quyền riêng tư 7 nguyên tắc & Nguyên tắc thiết kế tổng thể hệ thống \\
+\end{longtable}
+
+\chapter{Hướng Dẫn Cài Đặt và Triển Khai}
+\label{app:installation}
+
+\section{Yêu cầu hệ thống}
+
+\begin{itemize}
+  \item Docker 24.x và Docker Compose 2.x
+  \item Python 3.11+ (cho development)
+  \item Node.js 20+ (cho Chrome Extension)
+  \item GPU NVIDIA với CUDA 12.x (tùy chọn, cho training)
+\end{itemize}
+
+\section{Cài đặt môi trường Development}
+
+\begin{lstlisting}[style=bashstyle, caption={Cài đặt development environment}]
+# 1. Clone repository
+git clone https://github.com/[username]/vietnamese-emotion-detection
+cd vietnamese-emotion-detection
+# 2. Tao file moi truong (.env)
+cp .env.example .env
+# Chinh sua cac bien moi truong trong .env
+
+# 3. Download PhoBERT ONNX model
+python scripts/download_model.py --quantize int8
+
+# 4. Khoi dong tat ca services
+docker compose up -d
+
+# 5. Kiem tra trang thai
+docker compose ps
+
+# 6. Xem logs
+docker compose logs -f inference-engine
+
+# 7. Test API
+curl -X POST http://localhost:8000/api/v1/text/analyze \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -d '{"text": "toi thay minh khong co gia tri gi ca"}'
+\end{lstlisting}
+
+\begin{notebox}
+Bổ sung hướng dẫn chi tiết: (1) cách chạy fine-tuning PhoBERT trên Google Colab (link notebook); (2) cách cài Chrome Extension vào Chrome; (3) cách kết nối với Jitsi Meet test instance; (4) troubleshooting các lỗi thường gặp.
+\end{notebox}
+
+\chapter{Mẫu Thông Báo Consent cho Người Dùng}
+\label{app:consent}
+
+\begin{mdframed}[linecolor=accentblue, linewidth=1.5pt, topline=true]
+\textbf{\large THÔNG BÁO VỀ PHÂN TÍCH CẢM XÚC TỰ ĐỘNG}
+
+\vspace{0.5em}
+
+Phiên họp/học này sử dụng hệ thống AI để phân tích văn bản hội thoại nhằm hỗ trợ nhận biết sớm dấu hiệu căng thẳng tâm lý.
+
+\vspace{0.5em}
+\textbf{Hệ thống CHỈ phân tích văn bản transcript -- KHÔNG thu thập audio, video hay khuôn mặt của bạn.}
+
+\vspace{0.5em}
+\textbf{Đây là công cụ hỗ trợ, KHÔNG phải chẩn đoán y tế. Kết quả chỉ được chia sẻ với người giám sát được ủy quyền.}
+
+\vspace{0.5em}
+Bạn có thể opt-out bất kỳ lúc nào trong \textit{Settings > Quản lý Consent}. Khi opt-out, toàn bộ dữ liệu của bạn sẽ được xóa trong vòng 48 giờ.
+
+\vspace{1em}
+\begin{center}
+\large $\square$ \textbf{Tôi đã đọc và đồng ý với các điều khoản trên}
+\end{center}
+\end{mdframed}
+
+\chapter{Danh Sách API Endpoints}
+\label{app:api}
+
+\begin{longtable}{llp{6cm}l}
+\toprule
+\textbf{Method} & \textbf{Endpoint} & \textbf{Mô tả} & \textbf{Auth} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+POST      & /api/v1/sessions              & Tạo phiên giám sát mới          & Bearer JWT \\
+DELETE    & /api/v1/sessions/\{id\}       & Kết thúc phiên                   & Bearer JWT \\
+GET       & /api/v1/sessions/\{id\}/results & Lấy kết quả phiên              & Bearer JWT \\
+WebSocket & /ws/sessions/\{id\}/stream    & Real-time risk score updates     & Bearer JWT \\
+POST      & /api/v1/text/analyze          & Phân tích đoạn văn bản           & Bearer JWT \\
+GET       & /api/v1/reports/\{session\_id\} & Xuất báo cáo phiên PDF         & Bearer JWT \\
+POST      & /api/v1/consent               & Ghi nhận consent người dùng      & Bearer JWT \\
+DELETE    & /api/v1/consent/\{user\_id\}  & Thu hồi consent + xóa dữ liệu   & Bearer JWT \\
+GET       & /health                       & Health check endpoint            & None \\
+GET       & /metrics                      & Prometheus metrics               & Internal \\
+\end{longtable}
+
+\chapter{Tiến Độ Thực Hiện Đề Tài}
+\label{app:timeline}
+
+\begin{table}[H]
+\centering
+\caption{Tiến độ thực hiện 9 tháng}
+\label{tab:timeline}
+\begin{tabularx}{\linewidth}{lX*{9}{c}}
+\toprule
+\textbf{GĐ} & \textbf{Nội dung} & \textbf{T1} & \textbf{T2} & \textbf{T3} & \textbf{T4} & \textbf{T5} & \textbf{T6} & \textbf{T7} & \textbf{T8} & \textbf{T9} \\
+\midrule
+1 & Nghiên cứu tài liệu    & $\bullet$ & $\bullet$ & & & & & & & \\
+2 & Thu thập, gán nhãn dữ liệu & & $\bullet$ & $\bullet$ & & & & & & \\
+3 & Thiết kế kiến trúc     & & $\bullet$ & $\bullet$ & & & & & & \\
+4 & Fine-tuning \& benchmark & & & $\bullet$ & $\bullet$ & & & & & \\
+5 & Phát triển backend     & & & & $\bullet$ & $\bullet$ & & & & \\
+6 & Platform integrations  & & & & & $\bullet$ & $\bullet$ & & & \\
+7 & Phát triển frontend    & & & & & $\bullet$ & $\bullet$ & & & \\
+8 & Testing \& đánh giá    & & & & & & $\bullet$ & $\bullet$ & & \\
+9 & Viết luận văn          & & & & & & & $\bullet$ & $\bullet$ & $\bullet$ \\
+\bottomrule
+\end{tabularx}
+\end{table}

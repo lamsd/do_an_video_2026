@@ -1,0 +1,31 @@
+\chapter{Tổng Quan Nghiên Cứu và Cơ Sở Lý Thuyết}
+\label{chap:literature}
+
+\section{Phân biệt sentiment, emotion và sàng lọc lâm sàng}
+Sentiment trả lời nội dung biểu đạt tích cực, trung tính hay tiêu cực. Emotion/intent là bài toán đa nhãn về sắc thái hoặc mục đích giao tiếp và cần guideline riêng. Sàng lọc triệu chứng trầm cảm yêu cầu công cụ tự báo cáo như PHQ-9, đúng cửa sổ thời gian và protocol lâm sàng \cite{kroenke2001}; chẩn đoán theo DSM-5 còn đòi hỏi đánh giá chuyên môn \cite{dsm5}. Vì thế, không có phép ánh xạ trực tiếp từ một câu transcript sang tiêu chí DSM-5 hay PHQ-9 trong nghiên cứu này.
+
+\begin{table}[H]\centering
+\caption{Ranh giới giữa các lớp bài toán}
+\label{tab:task-boundary}
+\begin{tabularx}{\linewidth}{lXX}
+\toprule
+Bài toán & Nhãn/dữ liệu cần có & Phạm vi khóa luận\\ \midrule
+Sentiment & Nhãn cấp analysis unit & Mục tiêu thiết kế của ứng dụng\\
+Emotion/intent & Multi-label và guideline & Hướng mở rộng\\
+Sàng lọc trầm cảm & PHQ-9, consent, protocol lâm sàng & Ngoài phạm vi\\ \bottomrule
+\end{tabularx}\end{table}
+
+\section{Transformer, BERT và PhoBERT}
+Transformer sử dụng self-attention để học quan hệ ngữ cảnh song song \cite{vaswani2017}:
+\begin{equation}
+\mathrm{Attention}(Q,K,V)=\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+\end{equation}
+BERT là encoder Transformer được pre-train bằng masked language modeling \cite{devlin2019}. PhoBERT là mô hình tiền huấn luyện chuyên cho tiếng Việt \cite{phobert2020}. Với PhoBERT, tokenizer/checkpoint và bước word segmentation tương thích phải được sử dụng cùng nhau; không nên áp dụng stem hoặc bỏ stopword như một tiền xử lý mặc định.
+
+PhoBERT là lựa chọn hợp lý khi tích hợp mô hình cho tiếng Việt, nhưng không mặc nhiên là mô hình tốt nhất cho transcript họp. TF--IDF + Logistic Regression, PhoBERT và mBERT/XLM-R là các lựa chọn cần được đánh giá trên cùng tập dữ liệu mục tiêu trước khi thay runtime \cite{xlmr2020}. Khóa luận trình bày các lựa chọn này để định hướng adapter và tối ưu hóa sau này, không công bố một phép so sánh thực nghiệm giữa chúng.
+
+\section{Transcript ASR và quality gate}
+ASR có thể tạo lỗi nhận dạng từ tiếng ồn, echo, diarization, VAD, code-switching hoặc hallucination. WER/CER chỉ được báo cáo khi có audio và ground truth phù hợp; một file transcript minh họa không phải benchmark ASR. Quality gate trong hệ thống loại segment rỗng, quá ngắn, duration không hợp lệ, trùng lặp, hallucination đã biết, nội dung không thuộc cuộc họp hoặc sai ngôn ngữ. Các segment không đủ điều kiện được lưu lý do và trả \textit{unknown}, thay vì ép về lớp neutral.
+
+\section{Nguyên tắc thiết kế có trách nhiệm}
+Consent, tối thiểu hóa dữ liệu, kiểm soát truy cập, auditability và human oversight là yêu cầu thiết kế. Hệ thống được thiết kế để hỗ trợ các nguyên tắc bảo vệ dữ liệu, không tuyên bố tuân thủ GDPR, AI Act hay pháp luật Việt Nam khi chưa có legal review/DPIA. EU AI Act có thể được tham chiếu như bối cảnh quản trị AI \cite{euaiact2024}.

@@ -1,0 +1,27 @@
+\chapter{Tích Hợp Mô Hình và Đánh Giá}
+\label{chap:model}
+
+\section{Trạng thái mô hình trong MVP}
+MVP triển khai giao diện \texttt{SentimentClassifier} và một rule baseline có tính xác định, phiên bản \texttt{baseline-rules-v1}. Baseline này có mục đích kiểm tra data contract, quality gate, queue, persistence và dashboard; nó không phải là mô hình học máy, cũng không được dùng để suy ra chất lượng sentiment.
+
+Thư mục dự án có các notebook và dữ liệu đã tồn tại từ quá trình thử nghiệm trước. Các notebook đó thực hiện phân loại trầm cảm nhị phân trên dữ liệu văn bản ngoài domain họp, với cách chia dữ liệu ngẫu nhiên. Vì task, nhãn, nguồn dữ liệu và protocol khác với sentiment ba lớp từ transcript họp, chúng không phải model artifact được serving và không được dùng làm kết quả cho khóa luận. Không thể chuyển trực tiếp một accuracy từ bài toán nhị phân này thành chất lượng cho dashboard sentiment.
+
+\section{Các lựa chọn tích hợp về mặt lý thuyết}
+Khi có model artifact phù hợp với task, adapter có thể được thay bằng các lựa chọn sau mà không thay đổi API hay schema persistence:
+\begin{itemize}
+  \item TF--IDF + Logistic Regression: baseline nhẹ, chạy CPU, dễ tái lập và dễ phân tích lỗi.
+  \item PhoBERT fine-tune: lựa chọn chính cho tiếng Việt khi tokenizer, word segmentation và checkpoint được dùng tương thích \cite{phobert2020}.
+  \item mBERT/XLM-R: comparator cho dữ liệu đa ngôn ngữ khi có benchmark thích hợp \cite{xlmr2020}.
+\end{itemize}
+ViHealthBERT chỉ có ý nghĩa khi task, model card và license phù hợp \cite{vihealthbert2022}; nó không được coi là mặc định cho transcript họp.
+
+\section{Protocol lý thuyết khi huấn luyện lại}
+Ứng dụng hiện không yêu cầu người dùng gán nhãn trong quá trình vận hành. Tuy vậy, để tạo hoặc retrain model sentiment có thể claim chất lượng, cần một dataset đúng task với guideline cho từng lớp, phủ định, mỉa mai, code-switching và trường hợp thiếu ngữ cảnh. Tối thiểu hai annotator độc lập, adjudication và Cohen's kappa hoặc Krippendorff's alpha là protocol khuyến nghị. Dữ liệu phải split theo \textbf{meeting}, không split ngẫu nhiên theo segment, để tránh leakage speaker và ngữ cảnh. Test set được khóa trước tuning; threshold chọn trên validation.
+
+\section{Metric và tiêu chí báo cáo lý thuyết}
+Nếu thực hiện retraining, báo cáo cần gồm macro-F1, precision/recall/F1 theo lớp, confusion matrix, calibration, coverage, P50/P95 inference và phân bố lớp. Accuracy đơn lẻ không đủ khi lớp neutral mất cân bằng. Bootstrap confidence interval chỉ được công bố sau khi chạy thật, kèm số resample, seed và đơn vị resample. Khóa luận không điền F1, AUC hay SLA giả định.
+
+\section{Tối ưu hóa và retraining}
+Trước khi promote một model, cần lưu dataset manifest, commit/source version, preprocessing, checkpoint, hyperparameter, seed và environment. Các hướng tối ưu hóa gồm làm sạch transcript theo quality gate, gộp context cùng speaker có giới hạn, chọn threshold theo validation, class weighting, early stopping, tối ưu batch size/max length và calibration sau huấn luyện. Không tối ưu bằng cách dùng test set nhiều lần.
+
+Retraining chỉ được kích hoạt khi có dữ liệu mới hợp pháp, thay đổi domain hoặc bằng chứng drift; model mới chạy shadow mode, so sánh với runtime hiện tại trên holdout đã khóa, sau đó mới được đăng ký version và chuyển serving. Model cũ vẫn giữ version/evidence để audit và rollback. Các bước này là thiết kế định hướng, chưa được thực nghiệm trong khóa luận.

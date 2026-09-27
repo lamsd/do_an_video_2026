@@ -1,0 +1,14 @@
+\chapter{Giao Diện Người Dùng}
+\label{chap:frontend}
+
+\section{Mục tiêu trải nghiệm}
+Dashboard biểu diễn output của bộ phân loại trên transcript, không biểu diễn điểm rủi ro hay trạng thái của participant. Thiết kế ưu tiên clarity, context và control: mỗi aggregate đi kèm coverage, model version và evidence có thể kiểm tra; confidence chỉ hiển thị khi adapter cung cấp.
+
+\section{Chức năng MVP đã triển khai}
+Người dùng nhập application meeting UUID. Dashboard hiển thị KPI positive/neutral/negative, coverage, polarity và model version; timeline theo cửa sổ thời gian; cùng danh sách evidence gồm speaker, transcript, timestamp, quality reason, label và confidence. Khi backend phát \texttt{analysis.sentiment.updated}, giao diện làm mới qua SSE.
+
+\section{Giới hạn hiển thị}
+Lớp \textit{unknown}, confidence thấp hoặc coverage thấp là kết quả hợp lệ và phải hiển thị rõ. Giao diện không dùng traffic-light cho con người, HR scoring, auto-notification, nút liên hệ hỗ trợ hay kết luận về sức khỏe tâm thần. Các ý tưởng export báo cáo, đa nền tảng, consent UI và kiểm thử human-factors chỉ là đề xuất tương lai.
+
+\section{Đánh giá UX cần thực hiện}
+Đánh giá sau này cần có protocol, consent, số người tham gia, nhiệm vụ kiểm tra và metric như task completion hoặc SUS/NASA-TLX. Mục tiêu là đo liệu evidence/confidence/coverage có giúp người dùng hiểu giới hạn model; không phải đo khả năng người dùng phát hiện trầm cảm.

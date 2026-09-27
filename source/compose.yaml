@@ -1,0 +1,91 @@
+name: meeting-intelligence
+
+services:
+  backend:
+    image: meeting-intelligence-backend:local
+    build:
+      context: ./src/backend
+    env_file: settings.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in settings.env}@postgres:5432/${POSTGRES_DB:-meeting}
+      REDIS_URL: redis://valkey:6379/0
+    ports:
+      - "127.0.0.1:${API_PORT:-8088}:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks: [default, vexa]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    image: meeting-intelligence-backend:local
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.sentiment"]
+    env_file: settings.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in settings.env}@postgres:5432/${POSTGRES_DB:-meeting}
+      REDIS_URL: redis://valkey:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks: [default, vexa]
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./src/dashboard
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-meeting}
+      POSTGRES_USER: ${POSTGRES_USER:-meeting}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in settings.env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - meeting-intelligence-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - meeting-intelligence-valkey:/data
+    restart: unless-stopped
+
+volumes:
+  meeting-intelligence-postgres:
+  meeting-intelligence-valkey:
+
+networks:
+  vexa:
+    external: true
+    name: ${VEXA_NETWORK:?set VEXA_NETWORK in settings.env}
