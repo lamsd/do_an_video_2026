@@ -129,6 +129,85 @@ async def timeline(
     return [{"start": row.window_start, "end": row.window_end, "score": row.score, "coverage": row.coverage, "unit_count": row.unit_count} for row in rows]
 
 
+@router.get("/analytics/speakers")
+async def speakers(
+    meeting_id: UUID, db: AsyncSession = Depends(session), user: str = Depends(owner)
+):
+    """Return an independent sentiment summary for each transcript speaker."""
+    await _owned(db, meeting_id, user)
+    run = await db.scalar(
+        select(AnalysisRun)
+        .where(AnalysisRun.meeting_id == meeting_id)
+        .order_by(AnalysisRun.created_at.desc())
+    )
+    if run is None:
+        return []
+
+    windows = (
+        await db.scalars(
+            select(MeetingSentimentWindow)
+            .where(
+                MeetingSentimentWindow.meeting_id == meeting_id,
+                MeetingSentimentWindow.source_revision == run.source_revision,
+                MeetingSentimentWindow.scope == "speaker",
+            )
+            .order_by(MeetingSentimentWindow.speaker_key, MeetingSentimentWindow.window_start)
+        )
+    ).all()
+    names = {
+        key or "": name
+        for key, name in (
+            await db.execute(
+                select(AnalysisUnit.speaker_key, AnalysisUnit.speaker_name)
+                .where(
+                    AnalysisUnit.meeting_id == meeting_id,
+                    AnalysisUnit.source_revision == run.source_revision,
+                    AnalysisUnit.is_current.is_(True),
+                )
+            )
+        ).all()
+        if name
+    }
+    grouped: dict[str, dict] = {}
+    for window in windows:
+        source_key = window.speaker_key or ""
+        speaker = " ".join((names.get(source_key) or "").split())
+        # Vexa may rotate diarization keys during one meeting. A supplied name
+        # is the stable display identity, so merge its windows into one person.
+        identity = f"name:{speaker.casefold()}" if speaker else f"key:{source_key or 'unassigned'}"
+        group = grouped.setdefault(
+            identity,
+            {"speaker": speaker or "Chưa gán speaker", "speaker_keys": set(), "rows": []},
+        )
+        group["speaker_keys"].add(source_key)
+        group["rows"].append(window)
+
+    summaries = []
+    for group in grouped.values():
+        rows = group["rows"]
+        positive = sum(row.positive_weight for row in rows)
+        neutral = sum(row.neutral_weight for row in rows)
+        negative = sum(row.negative_weight for row in rows)
+        total = positive + neutral + negative
+        score_weight = sum(row.unit_count for row in rows if row.score is not None)
+        unit_count = sum(row.unit_count for row in rows)
+        coverage_weight = sum(row.coverage * row.unit_count for row in rows)
+        summaries.append(
+            {
+                "speaker_key": next(iter(group["speaker_keys"]), "") or None,
+                "speaker": group["speaker"],
+                "unit_count": unit_count,
+                "coverage": coverage_weight / unit_count if unit_count else 0,
+                "score": sum((row.score or 0) * row.unit_count for row in rows) / score_weight if score_weight else None,
+                "ratios": {
+                    key: value / total if total else 0
+                    for key, value in {"positive": positive, "neutral": neutral, "negative": negative}.items()
+                },
+            }
+        )
+    return sorted(summaries, key=lambda item: (-item["unit_count"], item["speaker"]))
+
+
 @router.get("/analytics/units")
 async def units(
     meeting_id: UUID,

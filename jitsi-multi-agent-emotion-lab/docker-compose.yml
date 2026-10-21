@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: emotion_lab
+      POSTGRES_USER: emotion_lab
+      POSTGRES_PASSWORD: emotion_lab
+    volumes:
+      - emotion-lab-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emotion_lab -d emotion_lab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
+      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://emotion_lab:emotion_lab@db:5432/emotion_lab}
+      MEDIA_ROOT: /app/data/media
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}
+      EMOTION_CHECKPOINT: ${EMOTION_CHECKPOINT:-}
+      EMOTION_MODEL_VERSION: ${EMOTION_MODEL_VERSION:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/media:/app/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  emotion-lab-postgres:
+

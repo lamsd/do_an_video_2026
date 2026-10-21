@@ -1,14 +1,154 @@
-\chapter{Giao Diện Người Dùng}
+\chapter{Giao Diện Người Dùng và Dashboard}
 \label{chap:frontend}
 
-\section{Mục tiêu trải nghiệm}
-Dashboard biểu diễn output của bộ phân loại trên transcript, không biểu diễn điểm rủi ro hay trạng thái của participant. Thiết kế ưu tiên clarity, context và control: mỗi aggregate đi kèm coverage, model version và evidence có thể kiểm tra; confidence chỉ hiển thị khi adapter cung cấp.
+Frontend là lớp diễn giải kết quả pipeline cho người dùng, không phải một lớp suy luận độc lập. Thiết kế dashboard vì vậy phải đồng thời làm ba việc: trình bày trạng thái hệ thống, cho phép đối chiếu kết quả với evidence transcript, và truyền đạt giới hạn của output. Chương này mô tả single-page dashboard hiện có, cách nó tích hợp REST/SSE với backend và các yêu cầu thiết kế khi vận hành thực tế.
 
-\section{Chức năng MVP đã triển khai}
-Người dùng nhập application meeting UUID. Dashboard hiển thị KPI positive/neutral/negative, coverage, polarity và model version; timeline theo cửa sổ thời gian; cùng danh sách evidence gồm speaker, transcript, timestamp, quality reason, label và confidence. Khi backend phát \texttt{analysis.sentiment.updated}, giao diện làm mới qua SSE.
+\section{Mục tiêu thiết kế và ranh giới sử dụng}
+Dashboard biểu diễn output sentiment của transcript, không biểu diễn điểm rủi ro, năng lực, cảm xúc nội tại hay trạng thái sức khỏe tâm thần của participant. Một polarity aggregate chỉ có ý nghĩa trong phạm vi analysis unit, revision và model version đã tạo ra nó. Do đó, giao diện ưu tiên bốn nguyên tắc: \emph{context} (có transcript/timestamp/speaker), \emph{traceability} (có evidence và version), \emph{uncertainty} (có coverage/confidence/unknown) và \emph{control} (trạng thái tải/lỗi rõ ràng, không tự động tạo quyết định).
 
-\section{Giới hạn hiển thị}
-Lớp \textit{unknown}, confidence thấp hoặc coverage thấp là kết quả hợp lệ và phải hiển thị rõ. Giao diện không dùng traffic-light cho con người, HR scoring, auto-notification, nút liên hệ hỗ trợ hay kết luận về sức khỏe tâm thần. Các ý tưởng export báo cáo, đa nền tảng, consent UI và kiểm thử human-factors chỉ là đề xuất tương lai.
+Các yêu cầu này biến dashboard thành một phần của cơ chế human oversight, thay vì một màn hình chỉ hiển thị metric. Confidence chỉ là điểm do adapter trả về và không được trình bày như xác suất về con người. Khi không có dữ liệu, coverage thấp hoặc label là \textit{unknown}, giao diện cần bảo toàn trạng thái ``không đủ dữ liệu'' thay vì dùng giá trị mặc định trung tính.
 
-\section{Đánh giá UX cần thực hiện}
-Đánh giá sau này cần có protocol, consent, số người tham gia, nhiệm vụ kiểm tra và metric như task completion hoặc SUS/NASA-TLX. Mục tiêu là đo liệu evidence/confidence/coverage có giúp người dùng hiểu giới hạn model; không phải đo khả năng người dùng phát hiện trầm cảm.
+\begin{table}[H]
+\centering
+\caption{Yêu cầu thiết kế dashboard và hiện thực trong MVP}
+\label{tab:frontend-design}
+\begin{tabularx}{\linewidth}{p{0.27\linewidth}XX}
+\toprule
+Yêu cầu & Hiện thực hiện tại & Ràng buộc/việc cần làm \\ \midrule
+Khôi phục ngữ cảnh & Tự tải meeting mới nhất; cho phép nhập application meeting UUID hợp lệ & Chưa có danh sách/lọc meeting đầy đủ hay workspace selector \\
+Quan sát tổng quan & KPI positive/neutral/negative, coverage, polarity và model version & Không diễn giải KPI thành đánh giá con người \\
+Kiểm tra evidence & Hiển thị speaker, text, timestamp, quality status/reason, label và confidence & Chưa có lọc, phân trang hoặc export evidence \\
+Cập nhật gần thời gian thực & \texttt{EventSource} nhận SSE; debounce refresh 300 ms & SSE hiện dựa trên polling outbox ở backend, chưa có replay cursor/notification UI \\
+Phản hồi lỗi/trạng thái & Vùng \texttt{role=status} báo tải, meeting hiện hành và lỗi API & Chưa có error boundary, retry control hay offline state \\
+Accessibility & Form, button, heading và status dùng phần tử semantic cơ bản & Chưa có audit WCAG, label/legend đầy đủ cho timeline hoặc kiểm thử assistive technology \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Thiết kế không gian thông tin và mô hình giao diện}
+Giao diện được tổ chức theo thứ tự ra quyết định có thể kiểm tra: (i)~chọn đúng application meeting; (ii)~xác nhận trạng thái transcript, analysis run và revision; (iii)~quan sát aggregate ở cấp cuộc họp; (iv)~đặt aggregate vào lát cắt speaker hoặc thời gian; và cuối cùng (v)~đối chiếu với evidence. Trình tự này ngăn một KPI được đọc tách khỏi nguồn dữ liệu của nó. Nó cũng tách rõ trạng thái điều khiển (UUID, nút mở dashboard, yêu cầu final analysis) khỏi trạng thái mô tả (coverage, model version, timeline và evidence), nhờ đó người dùng có thể nhận biết thao tác nào làm thay đổi hệ thống.
+
+Hình~\ref{fig:frontend-ui} là mô hình giao diện được cập nhật theo dashboard trong mã nguồn và ảnh vận hành đại diện. Hình là \emph{wireframe} phục vụ mô tả cấu trúc; UUID, tên speaker, tỷ lệ sentiment và transcript trong hình không phải dữ liệu cuộc họp thật. Tỷ lệ/nút chỉ trở nên có nghĩa khi gắn với \texttt{source\_revision}, \texttt{model\_version}, coverage và evidence mà backend trả về.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
+  \definecolor{uidark}{RGB}{16,24,39}
+  \definecolor{uipanel}{RGB}{23,32,51}
+  \definecolor{uiborder}{RGB}{71,85,105}
+  \definecolor{uitext}{RGB}{229,231,235}
+  \definecolor{uimutetext}{RGB}{148,163,184}
+  \definecolor{uiaction}{RGB}{37,99,235}
+  \definecolor{uinegative}{RGB}{239,68,68}
+  \definecolor{uineutral}{RGB}{148,163,184}
+  \tikzset{
+    card/.style={draw=uiborder, fill=uipanel, rounded corners=2pt, minimum height=1.05cm, text=uitext, align=left, inner sep=3.5pt},
+    action/.style={draw=uiaction, fill=uiaction, rounded corners=2pt, minimum height=.62cm, text=white, align=center, inner sep=3.5pt},
+    tinylabel/.style={text=uimutetext, font=\scriptsize, anchor=west},
+    metric/.style={card, minimum width=2.17cm, minimum height=1.08cm}
+  }
+  \fill[uidark, rounded corners=3pt] (0,0) rectangle (15.8,11.2);
+  \node[anchor=west, text=uitext, font=\bfseries\Large] at (.45,10.62) {Meeting Intelligence};
+  \node[anchor=west, text=uimutetext] at (.45,10.13) {Phân tích sắc thái transcript có bằng chứng};
+  \draw[uiborder] (.45,9.72) -- (15.35,9.72);
+  \node[tinylabel] at (.45,9.38) {Application Meeting UUID};
+  \node[draw=uiborder, fill=uipanel, rounded corners=2pt, minimum width=10.6cm, minimum height=.62cm, anchor=west, text=uimutetext, inner sep=3.5pt] at (.45,8.95) {UUID của meeting được chọn};
+  \node[action, minimum width=1.62cm, anchor=west] at (11.35,8.95) {Mở dashboard};
+  \node[action, minimum width=1.82cm, anchor=west] at (13.18,8.95) {Chạy phân tích cuối};
+  \node[anchor=west, text=uimutetext] at (.45,8.42) {Transcript $n$ segment $\cdot$ Analysis status $\cdot$ revision $r$};
+  \node[anchor=west, text=blue!35] at (.45,8.03) {Meeting đang xem: UUID $\cdot$ trạng thái meeting};
+
+  \node[metric, anchor=west] at (.45,6.72) {\textcolor{uimutetext}{Positive}\\[-1pt]\textbf{Tỷ lệ}};
+  \node[metric, anchor=west] at (2.83,6.72) {\textcolor{uimutetext}{Neutral}\\[-1pt]\textbf{Tỷ lệ}};
+  \node[metric, anchor=west] at (5.21,6.72) {\textcolor{uimutetext}{Negative}\\[-1pt]\textbf{Tỷ lệ}};
+  \node[metric, anchor=west] at (7.59,6.72) {\textcolor{uimutetext}{Coverage}\\[-1pt]\textbf{Tỷ lệ đủ điều kiện}};
+  \node[metric, anchor=west] at (9.97,6.72) {\textcolor{uimutetext}{Polarity}\\[-1pt]\textbf{Score hoặc không đủ dữ liệu}};
+  \node[metric, anchor=west] at (12.35,6.72) {\textcolor{uimutetext}{Model}\\[-1pt]\textbf{model version}};
+
+  \node[anchor=west, text=uitext, font=\bfseries\large] at (.45,5.92) {Phân tích theo người nói};
+  \node[anchor=west, text=uimutetext] at (.45,5.52) {Aggregate độc lập theo speaker từ transcript final};
+  \node[card, minimum width=14.9cm, minimum height=1.03cm, anchor=west] at (.45,4.72) {\textbf{Speaker đã gán}\\[-1pt]\textcolor{uimutetext}{Số unit $\cdot$ coverage $\cdot$ positive / neutral / negative $\cdot$ polarity}};
+
+  \node[anchor=west, text=uitext, font=\bfseries\large] at (.45,3.82) {Sắc thái toàn cuộc họp theo thời gian};
+  \draw[uiborder] (.45,1.56) -- (15.35,1.56);
+  \foreach \x/\h/\c in {.6/.27/uineutral,1.05/.77/uinegative,1.50/.27/uineutral,1.95/.27/uineutral,2.40/.48/uineutral,2.85/.27/uineutral} {
+    \fill[\c, rounded corners=1.5pt] (\x,1.98) rectangle +(0.25,\h);
+  }
+  \node[anchor=west, text=uitext, font=\bfseries\large] at (.45,.83) {Evidence transcript};
+  \node[anchor=west, text=uimutetext] at (.45,.43) {Speaker $\cdot$ label $\cdot$ confidence $\cdot$ thời điểm $\cdot$ quality status/reason $\cdot$ text};
+\end{tikzpicture}%
+}
+\caption{Mô hình giao diện dashboard của MVP. Bố cục được xây dựng từ cấu trúc HTML/CSS/JavaScript hiện có và một ảnh vận hành đại diện; các giá trị trong hình là placeholder để tránh công bố dữ liệu cuộc họp.}
+\label{fig:frontend-ui}
+\end{figure}
+
+Sáu card overview dùng cùng một hàng để hỗ trợ so sánh nhanh, nhưng coverage và model version phải luôn đi cùng các tỷ lệ sentiment. Card theo speaker chỉ là lát cắt của transcript đã được gán speaker, không là thước đo đánh giá con người. Timeline dùng button để từng điểm có thể nhận focus/click; màu cần đi kèm title, legend và nhãn văn bản khi hoàn thiện accessibility, vì màu đơn lẻ không đủ để truyền đạt ý nghĩa \cite{wcag2024}.
+
+\section{Kiến trúc frontend và tích hợp backend}
+Dashboard được triển khai như static single-page application bằng HTML, CSS và JavaScript module. Nginx phục vụ asset, đặt header \texttt{X-Content-Type-Options}, \texttt{X-Frame-Options}, \texttt{Referrer-Policy} và reverse proxy cùng origin từ đường dẫn \texttt{/api/} sang FastAPI. Browser không biết địa chỉ nội bộ backend, không chứa Vexa API key và không kết nối trực tiếp tới PostgreSQL, Valkey hay Vexa.
+
+Hình~\ref{fig:frontend-architecture} mô tả luồng tích hợp. REST là đường đọc dữ liệu có thẩm quyền; SSE chỉ là tín hiệu rằng dữ liệu có thể đã đổi. Sau khi nhận event, frontend đọc lại transcript/analytics từ API thay vì coi event payload là nguồn dữ liệu độc lập. SSE là cơ chế server-to-client một chiều trên HTTP \cite{sse2015}, phù hợp với dashboard chủ yếu nhận thông báo cập nhật.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=11mm and 15mm,
+  ui/.style={draw=primaryblue, rounded corners=2pt, fill=lightblue, align=center, minimum width=36mm, minimum height=13mm},
+  service/.style={draw=accentblue, rounded corners=2pt, fill=accentblue!12, align=center, minimum width=36mm, minimum height=13mm},
+  store/.style={draw=primaryblue, cylinder, shape border rotate=90, aspect=0.28, fill=primaryblue!12, align=center, minimum width=28mm, minimum height=15mm},
+  future/.style={draw=gray, dashed, rounded corners=2pt, fill=gray!10, align=center, minimum width=34mm, minimum height=13mm},
+  flow/.style={-{Stealth[length=2.2mm]}, thick, draw=primaryblue},
+  event/.style={-{Stealth[length=2.2mm]}, thick, draw=accentblue},
+  optional/.style={-{Stealth[length=2.2mm]}, thick, draw=gray, dashed}
+]
+  \node[ui] (browser) {Browser dashboard\\HTML + CSS + JS};
+  \node[service, right=of browser] (nginx) {Nginx\\static asset + \texttt{/api/} proxy};
+  \node[service, right=of nginx] (api) {FastAPI\\REST analytics + SSE};
+  \node[store, right=of api] (db) {PostgreSQL\\meeting, transcript,\\analytics, outbox};
+  \node[future, below=of browser] (futureui) {Login/consent UI, workspace,\\export, accessibility audit};
+  \node[future, below=of api] (futureapi) {JWT/OAuth, notification,\\replay cursor (đề xuất)};
+
+  \draw[flow] (browser) -- node[above, font=\scriptsize]{GET/POST REST} (nginx);
+  \draw[flow] (nginx) -- (api);
+  \draw[flow] (api) -- node[above, font=\scriptsize]{query} (db);
+  \draw[event] (api.south) |- node[pos=0.25, right, font=\scriptsize]{SSE event} (browser.south);
+  \draw[optional] (futureui) -- (browser);
+  \draw[optional] (futureapi) -- (api);
+\end{tikzpicture}%
+}
+\caption{Kiến trúc frontend và các boundary tích hợp. Nét đứt: hạng mục chưa được triển khai/kiểm chứng.}
+\label{fig:frontend-architecture}
+\end{figure}
+
+\section{Mô hình trạng thái và quá trình vận hành giao diện}
+Khi tải trang, frontend gọi \texttt{GET /v1/meetings?limit=1}. Nếu có meeting, ứng dụng kiểm tra UUID, lưu trạng thái cục bộ \texttt{meetingId}/\texttt{meeting}, rồi tải song song transcript, overview, speaker aggregates và timeline. Evidence được tải qua endpoint units sau khi các thành phần chính hoàn tất. Nếu người dùng nhập UUID, frontend chỉ gọi API khi chuỗi thỏa biểu thức UUID; điều này tránh request vô nghĩa đến backend do input lỗi.
+
+Sau khi chọn meeting, frontend tạo \texttt{EventSource} đến endpoint event của meeting. Hai event \texttt{transcript.segment.upserted} và \texttt{analysis.sentiment.updated} cùng gọi \texttt{scheduleRefresh}; timer debounce 300 ms gom các event liên tiếp trước khi reload dữ liệu. Người dùng có thể yêu cầu \texttt{POST /analysis?kind=final} bằng nút ``Chạy phân tích cuối''. Chuỗi trạng thái này được tóm tắt như sau:
+\begin{center}
+\texttt{Chọn meeting $\rightarrow$ tải REST $\rightarrow$ render dashboard $\rightarrow$ kết nối SSE $\rightarrow$ event $\rightarrow$ refresh REST.}
+\end{center}
+
+Thiết kế refresh lại từ REST có ưu điểm là mọi card, timeline và evidence cùng phản ánh state hiện hành trong PostgreSQL, kể cả khi event bị gom hoặc đến sát nhau. Đổi lại, nó tạo thêm request sau event và chưa tối ưu cho số lượng dashboard lớn. Nếu mở rộng, frontend cần hỗ trợ reconnection status, \texttt{Last-Event-ID}/replay policy, exponential backoff, hủy request cũ và chỉ refresh vùng dữ liệu bị ảnh hưởng sau khi đã đo tải thực tế.
+
+\section{Các thành phần trình bày và diễn giải output}
+\subsection{Tổng quan, timeline và speaker}
+Khu vực overview hiển thị sáu giá trị: tỷ lệ positive, neutral, negative; coverage; polarity; và model version. Polarity hiển thị ``Không đủ dữ liệu'' khi score là \texttt{null}. Khu vực speaker hiển thị unit count, coverage, tỷ lệ các lớp và polarity riêng theo speaker mà backend đã gán; khi không có final transcript gán speaker, giao diện hiển thị trạng thái trống thay vì suy đoán danh tính.
+
+Timeline dùng các button theo cửa sổ thời gian. Màu xanh/lục, đỏ và xám hiện chỉ mã hóa polarity aggregate để hỗ trợ quét nhanh, không phải màu trạng thái của một người. Khi chọn một điểm timeline, dashboard tải evidence hiện hành của meeting. Ở phiên bản tiếp theo cần liên kết điểm đã chọn với chính cửa sổ thời gian tương ứng, thêm legend/nhãn văn bản và không chỉ dựa vào màu; hiện click timeline đang tải toàn bộ evidence thay vì lọc theo window.
+
+\subsection{Evidence và trạng thái không chắc chắn}
+Evidence hiển thị speaker, label, confidence, text, thời điểm, quality status và quality reasons. Việc dùng \texttt{textContent} và DOM API để render transcript/evidence giúp tránh chèn text nguồn như HTML. Nội dung transcript vẫn là dữ liệu nhạy cảm; giao diện chỉ nên cung cấp cho người có quyền và không được đưa vào URL, analytics bên thứ ba hoặc log browser không cần thiết.
+
+\textit{Unknown}, unit bị từ chối, coverage thấp và lỗi API là trạng thái hợp lệ của hệ thống. Giao diện hiện thể hiện một phần các trạng thái này qua text mô tả và \texttt{role=status}; khi vận hành thực tế cần bổ sung trạng thái loading/error riêng cho từng panel, retry có chủ đích, explanation ngắn cho coverage và cảnh báo về phạm vi diễn giải. Các cơ chế này quan trọng hơn việc che giấu dữ liệu thiếu bằng một chart ``đẹp''.
+
+\section{Accessibility, privacy và an toàn giao diện}
+HTML hiện dùng \texttt{form}, \texttt{label}, \texttt{button}, heading, section và vùng \texttt{role=status}; đây là nền tảng semantic cơ bản. WCAG 2.2 cung cấp các success criteria có thể kiểm tra, không phụ thuộc công nghệ, cho accessibility web \cite{wcag2024}. Trong thiết kế tiếp theo, dashboard cần kiểm tra keyboard navigation/focus, tương phản, target size, thông báo thay đổi qua screen reader, label có thể đọc được của điểm timeline và cách biểu diễn không chỉ dựa vào màu. Các yêu cầu này là mục tiêu thiết kế, không phải tuyên bố dashboard đã tuân thủ WCAG.
+
+Dashboard hiện bind cổng chỉ trên loopback qua Docker Compose và Nginx đặt một số security header. Tuy nhiên, nó chưa có login UI, consent UI, session timeout, content-security policy, CSRF strategy hoặc authorization production. Backend hiện dùng identity development; do đó giao diện không được public trước khi có authentication thật, TLS/reverse proxy, workspace authorization và kiểm thử tenant isolation. Privacy by design yêu cầu các kiểm soát này được xem xét xuyên suốt vòng đời xử lý dữ liệu \cite{cavoukian2011}.
+
+\section{Đánh giá UX và hướng tích hợp khi vận hành}
+Đánh giá giao diện cần trả lời liệu người dùng có hiểu đúng giới hạn output hay không, thay vì đo khả năng ``phát hiện trầm cảm''. Protocol đề xuất gồm các nhiệm vụ tìm evidence, nhận biết coverage thấp/unknown, so sánh revision/model version và diễn giải timeline có giới hạn; mỗi nghiên cứu cần consent, tiêu chí tuyển người tham gia, kịch bản dữ liệu an toàn và kế hoạch xử lý phản hồi. SUS có thể dùng như một thước đo usability ngắn \cite{brooke1996}; NASA-TLX là một lựa chọn đo perceived workload \cite{hart1988}. Các score chỉ được báo cáo sau khi có nghiên cứu người dùng thực tế.
+
+Các hướng tích hợp tiếp theo gồm: authentication/authorization thật và workspace selector; lifecycle consent trước khi hiển thị transcript; filter/pagination/export evidence có quyền hạn; notification/reconnect state; accessibility audit; i18n; và dashboard đa nền tảng sau khi backend có adapter tương ứng. Những hạng mục này không phải chức năng đã triển khai trong MVP và cần được kiểm thử bảo mật, UX và hiệu năng riêng.

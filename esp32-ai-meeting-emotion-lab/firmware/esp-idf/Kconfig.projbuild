@@ -1,0 +1,29 @@
+menu "ESP32 AI Meeting Lab device configuration"
+
+config LAB_WIFI_SSID
+    string "Wi-Fi SSID"
+
+config LAB_WIFI_PASSWORD
+    string "Wi-Fi password"
+
+config LAB_MQTT_URI
+    string "MQTT URI (mqtt://host:1883 or mqtts://host:8883)"
+    default "mqtt://192.168.1.10:1883"
+
+config LAB_MQTT_USERNAME
+    string "MQTT username (fixed agent id)"
+
+config LAB_MQTT_PASSWORD
+    string "MQTT password"
+
+config LAB_AGENT_ID
+    string "Fixed agent id"
+
+config LAB_DEVICE_ID
+    string "Fixed physical device id"
+
+config LAB_FIRMWARE_VERSION
+    string "Firmware version"
+    default "0.1.0"
+
+endmenu

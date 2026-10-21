@@ -1,0 +1,4 @@
+# Evidence is local unless it has been redacted and approved for version control.
+runs/*
+!runs/.gitkeep
+!templates/

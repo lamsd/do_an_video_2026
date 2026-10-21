@@ -1,0 +1,10 @@
+# Backend is the only coordinator and is permitted to route all experiment messages.
+user backend
+topic readwrite lab/#
+topic read $SYS/#
+
+# A physical/simulated device can only write below its own identity namespace.
+pattern readwrite lab/device/%u/#
+# Devices observe shared context only; speaking grants and generated replies are per-device above.
+pattern read lab/session/+/context
+

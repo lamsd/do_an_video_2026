@@ -51,7 +51,7 @@ curl -X POST 'http://localhost:8088/v1/meetings/<meeting-id>/analysis?kind=final
 
 `<meeting-id>` is the application UUID returned by `POST /v1/meetings`; it is not a Google Meet room code such as `abc-defg-hij`. The dashboard validates this before making an API request.
 
-The endpoints `/analytics/overview`, `/analytics/timeline`, and `/analytics/units` are nested under `/v1/meetings/<meeting-id>/`. See `../../TRANSCRIPT_AI_DATA_ANALYSIS.md` and `../../AI_SENTIMENT_ANALYSIS_DASHBOARD_PLAN.md` for the implementation contract and rollout gates.
+The endpoints `/analytics/overview`, `/analytics/timeline`, and `/analytics/units` are nested under `/v1/meetings/<meeting-id>/`. See `../../docs/ai-data/TRANSCRIPT_AI_DATA_ANALYSIS.md` and `../../docs/ai-data/AI_SENTIMENT_ANALYSIS_DASHBOARD_PLAN.md` for the implementation contract and rollout gates.
 
 The dashboard is served at `http://localhost:3000` by the `dashboard` Compose service. It is intentionally a framework-free MVP: it provides API-backed KPI cards, a time series, evidence rows, and SSE refresh without embedding secrets. Replace the temporary development identity with real session/JWT authentication before exposing it beyond localhost.
 
@@ -66,4 +66,4 @@ docker compose up -d --build
 curl http://localhost:8088/health
 ```
 
-Backend gọi Vexa qua Docker DNS `http://gateway:8000`. Đọc `../BACKEND_REALTIME_GUIDE.md` để biết cấu hình webhook Vexa và runbook đầy đủ.
+Backend gọi Vexa qua Docker DNS `http://gateway:8000`. Đọc `../../docs/architecture/BACKEND_REALTIME_GUIDE.md` để biết cấu hình webhook Vexa và runbook đầy đủ.

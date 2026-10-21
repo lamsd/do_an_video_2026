@@ -5,6 +5,10 @@ from .contracts import QualityDecision
 
 HALLUCINATION_PATTERNS = (
     re.compile(r"\bsubscribe\s+cho\s+k[eê]nh\b", re.IGNORECASE),
+    re.compile(
+        r"\bk[eê]nh\s+.+?\s+(?:đ[eêếể]\s+)?kh[oô]ng\s+b[oỏ]\s+l[ơỡ]\s+nh[ưữ]ng\s+video\s+h[aấ]p\s+d[aẫ]n\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bc[aả]m\s+[oơ]n\s+c[aá]c\s+b[aạ]n\s+[dđ][aã]\s+theo\s+d[oõ]i\b", re.IGNORECASE),
     re.compile(r"\bgracias\s+por\s+ver\s+el\s+video\b", re.IGNORECASE),
 )

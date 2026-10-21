@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 from sqlalchemy import select
 
-from ..analysis.classifier import RuleBaselineClassifier
+from ..analysis.classifier import build_classifier
 from ..config import get_settings
 from ..db import SessionLocal
 from ..models import AnalysisRun
@@ -19,10 +19,16 @@ log = logging.getLogger(__name__)
 
 async def process(run_id: UUID) -> None:
     settings = get_settings()
-    classifier = RuleBaselineClassifier(settings.sentiment_confidence_threshold)
+    classifier = build_classifier(
+        settings.classifier_adapter,
+        settings.sentiment_confidence_threshold,
+        artifact_dir=settings.model_artifact_dir,
+        artifact_sha256=settings.model_artifact_sha256,
+    )
     if settings.model_version != classifier.model_version:
         raise RuntimeError(
-            f"model adapter for {settings.model_version!r} is not installed; refusing baseline fallback"
+            f"configured model version {settings.model_version!r} does not match "
+            f"adapter version {classifier.model_version!r}"
         )
     async with SessionLocal() as db:
         run = await db.get(AnalysisRun, run_id)

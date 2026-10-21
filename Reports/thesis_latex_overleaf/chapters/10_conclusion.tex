@@ -1,22 +1,43 @@
 \chapter{Kết Luận và Hướng Phát Triển}
 \label{chap:conclusion}
 
-\section{Kết luận}
-Khóa luận trình bày thiết kế và hiện thực ứng dụng MVP cho ingest transcript, quality gate, analysis lifecycle, classifier adapter, persistence, realtime delivery và evidence dashboard. PostgreSQL giữ dữ liệu có version; worker tách API; outbox và SSE hỗ trợ cập nhật có thể truy vết. Các bảng kết quả được để trống có chủ đích để chỉ điền sau các run build và thực nghiệm có log/evidence tương ứng.
+\section{Tổng kết nghiên cứu}
+Khóa luận tiếp cận bài toán phân tích sentiment trên transcript họp như một bài toán \emph{thiết kế, hiện thực và kiểm chứng artefact hệ thống}, thay vì chỉ huấn luyện một bộ phân loại. Cách tiếp cận này phù hợp với nghiên cứu khoa học thiết kế trong hệ thống thông tin: artefact phải giải quyết một lớp vấn đề xác định và được đánh giá bằng bằng chứng phù hợp với mục tiêu của nó \cite{hevner2004}. Trong phạm vi đó, đề tài đã xây dựng MVP cho luồng \emph{Google Meet $\rightarrow$ Vexa $\rightarrow$ FastAPI/PostgreSQL/Valkey $\rightarrow$ worker $\rightarrow$ SSE Dashboard}.
 
-MVP không chứng minh chất lượng sentiment của PhoBERT hay các notebook model sẵn có, WER ASR, độ trễ percentile, khả năng chịu tải hay sàng lọc trầm cảm. Theo đó, kết luận của khóa luận chỉ giới hạn ở tính khả thi về mặt tích hợp và thiết kế kiểm toán cho transcript analysis.
+Đóng góp chính của artefact là xác lập một đường đi dữ liệu có thể truy vết: transcript được tiếp nhận và version hóa; quality gate và language routing quyết định dữ liệu có đủ điều kiện suy luận; các segment được ghép thành analysis unit có ranh giới speaker/thời gian; worker tách khỏi API thực hiện phân tích bất đồng bộ; PostgreSQL lưu nguồn dữ liệu chuẩn, run, prediction và evidence; còn dashboard nhận aggregate/evidence qua SSE. Việc gắn prediction với segment ID, transcript revision, preprocessing version và model version làm cho một kết quả có thể được kiểm tra lại khi input hoặc cấu hình thay đổi. Đây là đóng góp về khả năng audit và tích hợp, không phải tuyên bố rằng mọi dự đoán đều đúng.
+
+Runtime đã hiện thực là \texttt{baseline-rules-v2}, đặt sau classifier adapter để kiểm tra hợp đồng xử lý đầu cuối một cách xác định và dễ truy vết. Thiết kế adapter giữ chỗ cho PhoBERT hoặc custom model trong tương lai, nhưng PhoBERT không phải kết quả đã đạt của MVP. Tương tự, chỉ Google Meet thông qua Vexa là adapter có trong mã nguồn; Teams, Zoom và Jitsi mới là phương án kiến trúc mở rộng. Sự phân biệt giữa năng lực đã triển khai và phương án đề xuất là cần thiết để tránh nợ kỹ thuật và các tuyên bố vượt quá bằng chứng thực nghiệm \cite{sculley2015}.
+
+\section{Bằng chứng và phạm vi kết luận}
+Chương~\ref{chap:experiments} đã tách kiểm chứng phần mềm khỏi đánh giá khoa học của ASR, mô hình và trải nghiệm người dùng. Test đơn vị kiểm tra các invariant của quality gate, unit builder, service và Vexa parser; smoke pipeline với fixture tổng hợp kiểm tra đường đi API--PostgreSQL--Valkey--worker--analytics cho hai nhãn luật baseline; các script readiness kiểm tra khả năng tiếp cận service. Những bằng chứng này hỗ trợ kết luận rằng kiến trúc MVP có cơ chế kiểm chứng integration và lưu vết phù hợp với mục tiêu artefact.
+
+Ngược lại, khóa luận không báo cáo và không suy diễn F1/accuracy sentiment, WER/CER ASR, calibration, latency percentile, throughput, SLA, khả năng chịu tải, hiệu quả PhoBERT hay custom model. Không có corpus transcript họp được gán nhãn, benchmark đa mô hình, load test hoặc user study hoàn chỉnh. Vì vậy, các bảng kết quả định lượng được giữ là biểu mẫu; chỉ được điền sau một run có commit/image, manifest dữ liệu, cấu hình redaction, log và evidence bundle tương ứng. Đây là điều kiện để kết quả sau này có thể tái lập và phản biện.
+
+\section{Ý nghĩa đạo đức và vận hành}
+Giá trị của hệ thống không nằm ở một điểm sentiment tổng hợp mà ở khả năng đặt điểm đó trong ngữ cảnh và thể hiện sự không chắc chắn. \texttt{unknown}, rejected unit, coverage thấp và evidence không phải lỗi giao diện cần che giấu, mà là các tín hiệu giúp người dùng tránh diễn giải quá mức. Theo Chương~\ref{chap:ethics}, sentiment của transcript không phải suy luận về năng lực, hành vi hay sức khỏe tâm thần của người nói. Dashboard không được dùng cho xếp hạng nhân sự, đánh giá học tập, kỷ luật hay quyết định tự động.
+
+MVP đã có một số kiểm soát kỹ thuật ban đầu như webhook HMAC, deduplication, provenance và tách dashboard khỏi Vexa key. Tuy nhiên, các kiểm soát đó không đồng nghĩa hệ thống đã tuân thủ quy định. Trước khi xử lý dữ liệu thật trong môi trường vận hành, cần hoàn tất DPIA/review pháp lý, consent management, authentication và authorization sản xuất, TLS, retention/deletion, audit log, backup/restore và quy trình ứng phó sự cố. Privacy-by-design cần được duy trì suốt vòng đời hệ thống \cite{cavoukian2011}; model card và tài liệu vận hành cũng cần ghi rõ mục đích, giới hạn, dữ liệu đánh giá và trường hợp không nên sử dụng \cite{mitchell2019}.
 
 \section{Hạn chế}
-Runtime hiện là rule baseline; chưa có model artifact sentiment phù hợp được đóng gói để serving, benchmark đa mô hình, user study hoặc legal review. Các notebook hiện có là thử nghiệm phân loại trầm cảm nhị phân ngoài domain họp, nên không được coi là bằng chứng của ứng dụng sentiment. Tích hợp được xác nhận là Google Meet + Vexa local; các platform và hạ tầng khác mới ở mức thiết kế.
+Các giới hạn quan trọng của nghiên cứu gồm:
 
-\section{Hướng phát triển}
+\begin{itemize}
+  \item \textbf{Giới hạn dữ liệu và mô hình:} chưa có dataset sentiment đúng miền họp, protocol gán nhãn, split theo meeting, benchmark hoặc artifact model được promote vào serving. Các notebook phân loại trầm cảm nhị phân ngoài miền họp không phải bằng chứng cho sentiment transcript và không được ngoại suy sang sàng lọc lâm sàng.
+  \item \textbf{Giới hạn nguồn và tích hợp:} chưa có adapter vận hành cho Teams, Zoom, Jitsi; chưa có E2E production với transcript thật có consent, endpoint HTTPS công khai và bằng chứng vận hành dài hạn.
+  \item \textbf{Giới hạn hạ tầng:} Docker Compose hiện phục vụ MVP cục bộ; chưa chứng minh high availability, disaster recovery, autoscaling, quan sát tập trung hoặc resilience dưới tải và fault injection.
+  \item \textbf{Giới hạn bảo vệ dữ liệu:} định danh bằng \texttt{X-App-User-Id} là cơ chế phát triển; hệ thống chưa có SSO/RBAC production, consent/retention/deletion workflow và đánh giá fairness trên dữ liệu thực.
+\end{itemize}
+
+\section{Hướng phát triển có thể kiểm chứng}
+Hướng mở rộng nên được triển khai theo các mốc có điều kiện nghiệm thu rõ ràng, thay vì thay thế baseline bằng một model phức tạp mà không có bằng chứng.
+
 \begin{enumerate}
-\item Chuẩn hóa model artifact và adapter contract trước khi tích hợp model thay cho baseline.
-\item Khi cần nâng chất lượng, tạo dataset sentiment đúng domain, đánh giá theo meeting và không tái sử dụng test set để tuning.
-\item Tối ưu quality gate, context window, threshold, batch size/max length và calibration; version hóa mọi thay đổi.
-\item Bổ sung model registry, shadow run và đo ASR/system/UX trước khi claim hiệu năng.
-\item Không mở rộng sang clinical screening nếu chưa có protocol y đức, giám sát lâm sàng và quy trình xử lý nguy cơ riêng.
+  \item \textbf{Chuẩn hóa dữ liệu và đánh giá:} xây dựng corpus transcript họp có consent, guideline nhãn, annotator độc lập, split theo meeting và test set khóa. Báo cáo datasheet, phân bố lớp, agreement, Macro-F1 theo lớp, coverage, calibration và error analysis; không dùng test set để tuning \cite{gebru2021,artstein2008}.
+  \item \textbf{Vòng đời model:} đóng gói artifact cùng tokenizer, preprocessing, label mapping, threshold, dependency lockfile, evaluation report và model card. MLflow tracking/registry, shadow run và promotion policy là kiến trúc đề xuất để so sánh ứng viên với \texttt{baseline-rules-v2}, không phải service đang vận hành trong MVP.
+  \item \textbf{Đo lường hệ thống:} thiết kế workload đại diện, đo latency P50/P95/P99, throughput, queue lag, retry/failure rate, tài nguyên và recovery sau sự cố. Kết quả phải ghi rõ hardware, image, cấu hình và thời điểm chạy trước khi công bố SLA hoặc đặc tính ``gần thời gian thực'' định lượng.
+  \item \textbf{Mở rộng tích hợp an toàn:} thêm Teams, Zoom hoặc Jitsi qua adapter contract thống nhất; với mỗi nguồn, kiểm tra OAuth/webhook scope, signature, retry, revision, quyền dữ liệu và consent trước khi nối vào pipeline.
+  \item \textbf{Vận hành có trách nhiệm:} hoàn thiện quyền truy cập, retention/deletion, audit, backup/restore, quy trình khiếu nại/sự cố và đánh giá drift/fairness định kỳ. Mọi mở rộng sang safety hoặc sức khỏe tâm thần phải là nghiên cứu riêng có ethics approval, giám sát lâm sàng và protocol phản ứng phù hợp.
 \end{enumerate}
 
 \section{Lời kết}
-Một dashboard có trách nhiệm cần cho thấy bằng chứng và sự không chắc chắn, thay vì tạo kết luận về con người. Đây là nền tảng để phát triển nghiên cứu NLP tiếng Việt trong họp trực tuyến theo hướng hữu ích, minh bạch và tôn trọng quyền riêng tư.
+MVP cho thấy một hệ thống phân tích transcript có trách nhiệm phải quản lý đồng thời dữ liệu, ngữ cảnh, bất định và khả năng truy vết; việc thay bộ phân loại chỉ là một phần của bài toán. Nền tảng đã xây dựng tạo điều kiện cho các thực nghiệm NLP tiếng Việt trong họp trực tuyến ở bước tiếp theo, với nguyên tắc không biến tín hiệu ngôn ngữ thành kết luận về con người và không biến thiết kế đề xuất thành kết quả đã được chứng minh.

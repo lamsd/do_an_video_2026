@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jitsi-multi-agent-emotion-lab"
+version = "0.1.0"
+description = "Research prototype for synthetic multi-agent discussions and acoustic analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "pydantic-settings>=2.5,<3",
+  "sqlalchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "openai>=1.50,<3",
+  "numpy>=1.26,<3",
+  "scipy>=1.13,<2",
+  "soundfile>=0.12,<1",
+  "librosa>=0.10,<1",
+  "torch>=2.3,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.7", "mypy>=1.12"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+ignore = ["B008"] # FastAPI's documented Depends(...) parameter pattern.
+
+[tool.mypy]
+python_version = "3.11"
+files = ["backend/app"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+

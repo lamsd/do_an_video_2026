@@ -2,26 +2,62 @@
 \label{chap:intro}
 
 \section{Bối cảnh và tính cấp thiết của nghiên cứu}
-Transcript do ASR tạo ra giúp nội dung họp trực tuyến trở nên có thể tìm kiếm và phân tích. Tuy nhiên, transcript tiếng Việt trong bối cảnh này thường có lỗi nhận dạng, đoạn phát ngôn rất ngắn, tiếng ồn và code-switching. Vì vậy, một hệ thống phân tích đáng tin cậy không chỉ là gọi mô hình phân loại, mà còn phải kiểm soát chất lượng dữ liệu, lưu vết phiên bản và cho người dùng xem lại bằng chứng.
+Sự phổ biến của họp trực tuyến làm cho một lượng lớn trao đổi công việc và học tập được chuyển thành dữ liệu âm thanh. Khi kết hợp với nhận dạng tiếng nói tự động (Automatic Speech Recognition -- ASR), các trao đổi này có thể được biểu diễn dưới dạng transcript để tìm kiếm, rà soát và phân tích. Các mô hình ASR hiện đại đã cho thấy khả năng hoạt động trên nhiều ngôn ngữ và điều kiện âm thanh nhờ huấn luyện quy mô lớn \cite{whisper2022}. Tuy nhiên, transcript sinh tự động không phải bản ghi chép hoàn hảo: tiếng ồn nền, chồng lấn lời nói, lỗi phân tách người nói, phát ngôn ngắn và hiện tượng chuyển mã Việt--Anh đều có thể làm thay đổi hoặc làm thiếu ngữ cảnh của văn bản đầu vào.
 
-Sắc thái tích cực, trung tính hoặc tiêu cực của một đoạn transcript không tương đương với tình trạng sức khỏe tâm thần của người nói. WHO mô tả trầm cảm là trạng thái kéo dài với tiêu chí lâm sàng, không thể suy ra từ biến động cảm xúc thông thường \cite{who2023}. PHQ-9 cũng là công cụ tự báo cáo theo một khoảng thời gian xác định \cite{kroenke2001}. Do đó, khóa luận giới hạn ở bài toán phân tích sentiment của nội dung transcript, không phát hiện trầm cảm, không xếp hạng con người và không hỗ trợ quyết định về học tập hay việc làm.
+Trong bối cảnh đó, phân tích sắc thái cảm xúc (sentiment analysis) có thể hỗ trợ người dùng quan sát xu hướng biểu đạt của \emph{nội dung trao đổi}, chẳng hạn tỷ trọng phát ngôn tích cực, trung tính hoặc tiêu cực theo thời gian. Với tiếng Việt, các mô hình ngôn ngữ tiền huấn luyện như PhoBERT là một lựa chọn đáng chú ý cho các tác vụ xử lý ngôn ngữ tự nhiên \cite{phobert2020}. Dù vậy, năng lực của mô hình ngôn ngữ không loại bỏ các vấn đề thuộc hệ thống: dữ liệu vào cần được kiểm soát chất lượng, kết quả phải liên kết được với segment nguồn và thay đổi của transcript không được làm mất lịch sử phân tích.
+
+Vì thế, giá trị của một ứng dụng trong miền này không chỉ nằm ở việc gọi một bộ phân loại. Hệ thống cần phân tách rõ dữ liệu thô, dữ liệu đủ điều kiện để suy luận và kết quả tổng hợp; đồng thời lưu phiên bản transcript, phiên bản mô hình, confidence, coverage và evidence để người dùng có thể kiểm tra ngữ cảnh của mỗi kết quả. Cách tiếp cận này phù hợp với nguyên tắc bảo vệ dữ liệu ngay từ thiết kế (privacy by design) \cite{cavoukian2011} và nguyên tắc tối thiểu hóa dữ liệu trong GDPR \cite{gdpr2016}.
+
+Một ranh giới khoa học và đạo đức đặc biệt quan trọng là không đồng nhất sentiment với trạng thái sức khỏe tâm thần. Nhãn tích cực, trung tính hoặc tiêu cực của một analysis unit chỉ mô tả sắc thái của văn bản trong ngữ cảnh hẹp; nó không phải bằng chứng về đặc điểm, năng lực hay bệnh lý của người nói. Trầm cảm là tình trạng cần được đánh giá theo tiêu chí lâm sàng; PHQ-9 là công cụ tự báo cáo trong một khoảng thời gian xác định \cite{kroenke2001}, còn chẩn đoán đòi hỏi đánh giá chuyên môn theo các tiêu chuẩn như DSM-5 \cite{dsm5}. Do đó, khóa luận không phát hiện hay sàng lọc trầm cảm, không xếp hạng cá nhân và không hỗ trợ quyết định về học tập, tuyển dụng hoặc việc làm.
 
 \section{Vấn đề nghiên cứu}
-Khóa luận tập trung vào bốn vấn đề ở mức thiết kế và hiện thực ứng dụng: (i) lọc và định tuyến transcript nhiễu trước khi gọi bộ phân loại; (ii) thiết kế adapter để thay thế mô hình mà không làm thay đổi hợp đồng dữ liệu; (iii) bảo toàn lịch sử transcript và kết quả phân tích trong kiến trúc cập nhật gần thời gian thực; và (iv) trình bày confidence, coverage và evidence để hạn chế diễn giải quá mức.
+Từ bối cảnh trên, bài toán được đặt ra là: làm thế nào xây dựng một MVP phân tích sentiment từ transcript tiếng Việt trong họp trực tuyến mà vẫn bảo toàn khả năng truy vết, thay thế mô hình và kiểm soát cách diễn giải đầu ra? Bài toán được cụ thể hóa thành bốn vấn đề thiết kế và hiện thực:
+\begin{enumerate}[label=(\roman*)]
+  \item lọc các segment rỗng, quá ngắn, chưa hoàn tất, bị thu hồi hoặc có mẫu hallucination đã biết; lưu lại lý do loại thay vì âm thầm bỏ dữ liệu;
+  \item thiết kế hợp đồng adapter để bộ phân loại có thể được thay thế mà không làm thay đổi API, persistence và dashboard;
+  \item bảo toàn transcript gốc, revision và vòng đời phân tích trong kiến trúc cập nhật gần thời gian thực;
+  \item trình bày evidence, confidence và coverage để đầu ra được hiểu là hỗ trợ quan sát nội dung, không phải kết luận về con người.
+\end{enumerate}
 
-\section{Mục tiêu và câu hỏi nghiên cứu}
-\textbf{Mục tiêu tổng quát} là xây dựng và kiểm chứng ứng dụng có khả năng tích hợp bộ phân loại sentiment trên transcript tiếng Việt trong họp trực tuyến, có truy vết và bảo vệ quyền riêng tư. Khóa luận không đặt mục tiêu huấn luyện lại hoặc chứng minh chất lượng một mô hình học máy.
+Các vấn đề này gắn trực tiếp với kiến trúc của dự án. Ở luồng đã kiểm chứng, Google Meet là nguồn cuộc họp, Vexa cung cấp bot và transcript, còn ứng dụng sở hữu bản sao transcript, phiên bản phân tích và dashboard:
+\begin{center}
+\texttt{Google Meet $\rightarrow$ Vexa $\rightarrow$ FastAPI/PostgreSQL $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ SSE Dashboard.}
+\end{center}
+PostgreSQL là nguồn dữ liệu chuẩn; Valkey Stream chỉ phục vụ hàng đợi và fan-out, không thay thế dữ liệu bền vững. Worker tách khỏi FastAPI để suy luận không chặn API, còn dashboard chỉ giao tiếp với backend nên không tiếp xúc với khóa API của nhà cung cấp transcript. Cách phân tách này đồng thời tạo điều kiện kiểm toán lại chuỗi xử lý.
+
+Kiến trúc được định hướng theo mô hình đa nền tảng. Bên ngoài lõi ứng dụng, mỗi nền tảng họp---Google Meet, Microsoft Teams, Zoom hoặc Jitsi Meet---cần một \emph{platform adapter} chịu trách nhiệm xác thực URL/lịch họp, khởi tạo bot hoặc kết nối thu âm theo quyền được cấp, và chuẩn hóa transcript về cùng hợp đồng gồm định danh cuộc họp, speaker, timestamp, text, trạng thái \texttt{is\_final} và revision. Sau bước chuẩn hóa, mọi dữ liệu đi qua cùng quality gate, worker, persistence và dashboard; vì vậy việc thêm platform không làm thay đổi ngữ nghĩa của dữ liệu phân tích. Trong phiên bản hiện tại, chỉ adapter Google Meet kết hợp Vexa được hiện thực và kiểm chứng. Adapter cho Teams, Zoom và Jitsi Meet là thiết kế mở rộng, chỉ được xem là đã hỗ trợ sau khi có contract nguồn, cơ chế consent, kiểm thử tích hợp và đánh giá riêng.
+
+\section{Mục tiêu, câu hỏi và phương pháp nghiên cứu}
+\textbf{Mục tiêu tổng quát} là xây dựng và kiểm chứng ở mức tích hợp một ứng dụng có khả năng tiếp nhận transcript tiếng Việt trong họp trực tuyến, áp dụng bộ phân loại sentiment có thể thay thế, và cung cấp kết quả có bằng chứng truy vết cùng các cơ chế bảo vệ quyền riêng tư. Khóa luận không đặt mục tiêu huấn luyện lại mô hình hoặc chứng minh chất lượng dự báo của một mô hình học máy cụ thể.
+
+Để đạt mục tiêu này, nghiên cứu sử dụng hướng thiết kế--hiện thực--kiểm chứng artefact phần mềm: xác định yêu cầu và ràng buộc; thiết kế hợp đồng dữ liệu và kiến trúc; hiện thực MVP; sau đó kiểm chứng các luồng ingest, xử lý, lưu vết và hiển thị. Hướng tiếp cận này tương thích với quan điểm nghiên cứu khoa học thiết kế trong hệ thống thông tin, nơi artefact được xây dựng và đánh giá để giải quyết một lớp vấn đề xác định \cite{hevner2004}. Đánh giá trong khóa luận là kiểm chứng kỹ thuật của MVP, không phải đánh giá lâm sàng hay benchmark hiệu năng mô hình.
 
 \textbf{Câu hỏi nghiên cứu:}
 \begin{enumerate}
   \item Pipeline có loại, lưu vết lý do và bảo toàn revision của transcript không đủ điều kiện trước khi gọi bộ phân loại hay không?
   \item Hợp đồng adapter có cho phép thay thế bộ phân loại hiện tại bằng PhoBERT hoặc model artifact phù hợp mà không thay đổi API, persistence và dashboard hay không?
-  \item Kiến trúc event-driven có hoàn tất ingest, analysis lifecycle, persistence và cập nhật dashboard từ final segment hay không?
+  \item Kiến trúc event-driven có hoàn tất ingest, analysis lifecycle, persistence và cập nhật dashboard từ final segment hay không, đồng thời duy trì một hợp đồng có thể mở rộng sang platform adapter khác?
   \item Evidence, confidence và coverage trên dashboard được biểu diễn như thế nào để tránh coi output là kết luận về con người?
 \end{enumerate}
 
-\section{Phạm vi và giới hạn}
-MVP đã kiểm chứng trong phạm vi Google Meet kết hợp Vexa ở môi trường cục bộ. Hệ thống xử lý transcript theo speaker và timestamp; chỉ final segment đủ điều kiện mới được gửi tới adapter. Runtime đang chạy là rule baseline có tính xác định. Các notebook model sẵn có trong thư mục dự án phục vụ tham khảo/khám phá nhưng không được triển khai thành artifact serving trong MVP; đặc biệt các notebook phân loại trầm cảm nhị phân không tương đương bài toán sentiment ba lớp của ứng dụng. Các benchmark PhoBERT, đo WER ASR, latency percentile, Kubernetes, HA và đánh giá người dùng chỉ là lý thuyết hoặc hướng phát triển.
+\section{Đối tượng, phạm vi và giới hạn}
+\textbf{Đối tượng nghiên cứu} là pipeline xử lý transcript và kiến trúc ứng dụng phân tích sentiment, không phải việc nhận dạng cảm xúc đa phương thức hay đánh giá sức khỏe tâm thần. Đơn vị xử lý là \emph{analysis unit} được ghép từ các final segment liền kề của cùng người nói, có giới hạn về số segment và thời gian. Chỉ các unit tiếng Việt đạt quality gate mới được chuyển tới bộ phân loại; unit không phù hợp hoặc không được hỗ trợ giữ nhãn \textit{unknown}.
+
+MVP được kiểm chứng trong phạm vi Google Meet kết hợp Vexa ở môi trường cục bộ. Runtime hiện hành là rule baseline có tính xác định, phiên bản \texttt{baseline-rules-v2}, nhằm kiểm tra data contract, luồng hàng đợi, persistence và dashboard; đây không phải mô hình học máy và không được dùng để kết luận về chất lượng sentiment. Các notebook model sẵn có trong thư mục dự án chỉ phục vụ tham khảo hoặc khám phá. Đặc biệt, notebook phân loại trầm cảm nhị phân khác về task, nhãn và domain so với sentiment ba lớp của ứng dụng, nên không phải artifact được phục vụ trong MVP.
+
+Hợp đồng \texttt{SentimentClassifier} mở đường cho \emph{custom model} (mô hình tùy biến) theo từng tổ chức, miền nghiệp vụ hoặc tập dữ liệu đã được cho phép sử dụng. Một custom model chỉ có thể được đưa vào vận hành khi được đóng gói thành artifact có định danh version, khai báo rõ task/nhãn/ngôn ngữ, tương thích với hợp đồng input--output và có báo cáo đánh giá trên tập dữ liệu phù hợp. Mỗi prediction cần lưu model version, preprocessing version và evidence để có thể tái lập, so sánh hoặc rollback. Cơ chế này không đồng nghĩa với việc huấn luyện mô hình trên transcript của người dùng: việc thu thập, gán nhãn hoặc fine-tune dữ liệu theo từng khách hàng chỉ được thực hiện khi có cơ sở pháp lý, consent, chính sách lưu giữ dữ liệu và đánh giá rủi ro riêng.
+
+Do chưa có corpus transcript họp được gán nhãn đúng task và protocol đánh giá tương ứng, khóa luận không công bố macro-F1, accuracy, calibration, WER ASR, độ trễ percentile hay kết quả đánh giá người dùng. PhoBERT, custom model, benchmark đa mô hình, đo WER, Kubernetes, high availability và triển khai thực tế trên Zoom, Teams hoặc Jitsi Meet là hướng phát triển tiếp theo. Khi có dữ liệu hợp pháp và đánh giá thực nghiệm, các kết quả đó cần được báo cáo theo protocol tách dữ liệu theo cuộc họp, giữ test set độc lập và nêu rõ phiên bản model/dữ liệu.
+
+\section{Đóng góp của khóa luận}
+Trong giới hạn nêu trên, khóa luận đóng góp một artefact MVP và các quyết định thiết kế có thể tái sử dụng cho bài toán tương tự:
+\begin{itemize}
+  \item một pipeline transcript có quality gate, định tuyến ngôn ngữ, ghép analysis unit theo người nói và lưu revision/evidence;
+  \item một giao diện \texttt{SentimentClassifier} tách rời mô hình khỏi API, cơ sở dữ liệu và dashboard, tạo đường tích hợp có kiểm soát cho model artifact sau này;
+  \item một kiến trúc event-driven với PostgreSQL là nguồn dữ liệu chuẩn, outbox/queue cho xử lý bất đồng bộ và SSE cho cập nhật dashboard;
+  \item một định hướng adapter hóa nguồn transcript để Google Meet, Microsoft Teams, Zoom và Jitsi Meet có thể dùng chung lõi phân tích sau khi từng adapter được hiện thực và kiểm chứng;
+  \item cách biểu diễn dashboard nhấn mạnh coverage, confidence, timeline và evidence, đi kèm ranh giới sử dụng nhằm giảm nguy cơ diễn giải quá mức.
+\end{itemize}
 
 \section{Cấu trúc khóa luận}
-Chương~\ref{chap:literature} trình bày cơ sở lý thuyết; Chương~\ref{chap:data} mô tả dữ liệu và pipeline; Chương~\ref{chap:model} nêu mô hình và protocol đánh giá; các Chương~\ref{chap:backend}--\ref{chap:infra} mô tả MVP; Chương~\ref{chap:experiments} báo cáo kiểm chứng tích hợp và kế hoạch đánh giá; Chương~\ref{chap:ethics} trình bày bảo vệ dữ liệu và giới hạn; Chương~\ref{chap:conclusion} kết luận.
+Chương~\ref{chap:literature} trình bày cơ sở lý thuyết và ranh giới giữa sentiment với sàng lọc lâm sàng. Chương~\ref{chap:data} mô tả dữ liệu, hợp đồng và pipeline phân tích; Chương~\ref{chap:model} nêu trạng thái mô hình, adapter và protocol đánh giá khi huấn luyện lại. Các Chương~\ref{chap:backend}--\ref{chap:infra} trình bày hiện thực MVP ở backend, frontend và hạ tầng. Chương~\ref{chap:experiments} báo cáo kiểm chứng tích hợp và giới hạn thực nghiệm; Chương~\ref{chap:ethics} phân tích bảo vệ dữ liệu cùng các ràng buộc đạo đức; cuối cùng, Chương~\ref{chap:conclusion} tổng kết và đề xuất hướng phát triển.

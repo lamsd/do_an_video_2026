@@ -16,6 +16,26 @@ from ..models import (
 )
 
 
+def run_metrics(*, total_units: int, accepted_units: int, predicted_units: int) -> dict[str, float | int]:
+    """Keep data acceptance distinct from usable model output.
+
+    ``coverage`` is retained as a backwards-compatible alias for prediction
+    coverage. New API clients should use the explicit metric names.
+    """
+    acceptance_rate = accepted_units / total_units if total_units else 0
+    prediction_coverage = predicted_units / accepted_units if accepted_units else 0
+    effective_coverage = predicted_units / total_units if total_units else 0
+    return {
+        "unit_count": total_units,
+        "accepted_unit_count": accepted_units,
+        "predicted_unit_count": predicted_units,
+        "acceptance_rate": acceptance_rate,
+        "prediction_coverage": prediction_coverage,
+        "effective_coverage": effective_coverage,
+        "coverage": prediction_coverage,
+    }
+
+
 async def get_or_create_run(
     db: AsyncSession,
     *,
@@ -115,7 +135,10 @@ async def execute_run(
     await db.flush()
     await _aggregate(db, run)
     accepted = len(inferable)
-    run.metrics = {"unit_count": len(units), "accepted_unit_count": accepted, "coverage": accepted / len(units) if units else 0}
+    predicted = sum(prediction.label != "unknown" for prediction in predictions)
+    run.metrics = run_metrics(
+        total_units=len(units), accepted_units=accepted, predicted_units=predicted
+    )
     run.status = "succeeded"
     run.finished_at = datetime.now(UTC)
     db.add(
@@ -149,7 +172,10 @@ async def _aggregate(db: AsyncSession, run: AnalysisRun) -> None:
         for unit, prediction in values:
             if prediction.label not in weights:
                 continue
-            weight = max(1, unit.token_count) * prediction.confidence
+            # Baseline confidence is not calibrated and unit length does not
+            # establish sentiment importance. Use count-based aggregation until
+            # a calibrated model and a validated weighting policy exist.
+            weight = 1.0
             weights[prediction.label] += weight
             if prediction.polarity_score is not None:
                 score_total += prediction.polarity_score * weight

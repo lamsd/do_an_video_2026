@@ -38,3 +38,14 @@ def test_builder_keeps_hallucination_as_non_inferable_evidence():
     assert len(units) == 1
     assert units[0].quality_status == "rejected"
     assert "known_hallucination" in units[0].quality_reasons
+
+
+def test_builder_ignores_immediate_duplicate_final_segment():
+    units = build_units(
+        [
+            segment("one", 1_700_000_000, "Bạn đang làm gì vậy"),
+            segment("two", 1_700_000_001, "Bạn đang làm gì vậy"),
+        ]
+    )
+    assert len(units) == 1
+    assert units[0].segment_ids == ["one"]

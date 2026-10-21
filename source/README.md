@@ -180,7 +180,13 @@ Thực hiện theo thứ tự:
 5. Vexa contract: spawn/read transcript/stop, webhook valid/tampered/replay và delivery ledger.
 6. E2E: bot -> transcript -> analysis -> SSE -> Dashboard; restart backend/worker không mất data.
 
-Không dùng transcript cuộc họp thật trong Git, fixture hoặc CI logs. Real-meeting test cần consent người tham gia. Baseline hiện hành là `baseline-rules-v1`; không ghi là PhoBERT cho đến khi có artifact versioned và báo cáo đánh giá.
+Không dùng transcript cuộc họp thật trong Git, fixture hoặc CI logs. Real-meeting test cần consent người tham gia. Baseline hiện hành là `baseline-rules-v2`; không ghi là PhoBERT cho đến khi có artifact versioned và báo cáo đánh giá.
+
+## Model sentiment cho pilot
+
+`rules` chỉ là baseline kiểm chứng pipeline. Adapter `tfidf-logreg` nạp một artifact scikit-learn versioned từ `/models`, kiểm tra SHA-256 và dừng worker khi artifact/config không nhất quán - không tự fallback sang rules. Quy trình tạo artifact, manifest dữ liệu và cách cấu hình runtime ở [model-data/README.md](model-data/README.md). Corpus đào tạo phải được phép sử dụng, tách khỏi transcript vận hành và không phải dữ liệu phân loại trầm cảm trong `Reports/`.
+
+Use case pilot duy nhất là retrospective sau cuộc họp: người vận hành xem timeline, transcript và evidence tại Dashboard, không dùng output để đánh giá con người. Xem [pilot/retrospective/README.md](pilot/retrospective/README.md) trước khi chạy meeting thật; consent và dữ liệu thật không được đưa vào repository.
 
 ## Production checklist
 

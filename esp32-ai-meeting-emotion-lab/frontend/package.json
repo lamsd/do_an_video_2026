@@ -1,0 +1,23 @@
+{
+  "name": "esp32-ai-meeting-emotion-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "check": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.0.0",
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.7",
+    "@types/node": "24.3.0",
+    "typescript": "5.8.3",
+    "vite": "7.0.6"
+  }
+}

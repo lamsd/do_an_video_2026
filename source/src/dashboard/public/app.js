@@ -54,6 +54,28 @@ function renderOverview(overview) {
   byId("metrics").hidden = false;
 }
 
+function renderSpeakers(rows) {
+  const element = byId("speaker-metrics");
+  element.replaceChildren();
+  if (!rows.length) {
+    element.textContent = "Chưa có transcript final đã gán speaker để tổng hợp riêng.";
+  } else {
+    rows.forEach((row) => {
+      const card = document.createElement("article");
+      card.className = "speaker-card";
+      const title = document.createElement("h3");
+      title.textContent = row.speaker;
+      const meta = document.createElement("p");
+      meta.textContent = `${row.unit_count} đơn vị · Coverage ${ratio(row.coverage)}`;
+      const metrics = document.createElement("p");
+      metrics.textContent = `Positive ${ratio(row.ratios?.positive)} · Neutral ${ratio(row.ratios?.neutral)} · Negative ${ratio(row.ratios?.negative)} · Polarity ${score(row.score)}`;
+      card.append(title, meta, metrics);
+      element.append(card);
+    });
+  }
+  byId("speaker-section").hidden = false;
+}
+
 function renderTimeline(rows) {
   const element = byId("timeline");
   element.replaceChildren();
@@ -91,13 +113,15 @@ async function loadEvidence() {
 
 async function refresh() {
   if (!state.meetingId || !UUID.test(state.meetingId)) return;
-  const [transcript, overview, timeline] = await Promise.all([
+  const [transcript, overview, speakers, timeline] = await Promise.all([
     json(`/v1/meetings/${state.meetingId}/transcript`),
     json(`/v1/meetings/${state.meetingId}/analytics/overview`),
+    json(`/v1/meetings/${state.meetingId}/analytics/speakers`),
     json(`/v1/meetings/${state.meetingId}/analytics/timeline`),
   ]);
   renderTranscript(transcript);
   renderOverview(overview);
+  renderSpeakers(speakers);
   renderTimeline(timeline);
   await loadEvidence();
   byId("timeline-section").hidden = false;

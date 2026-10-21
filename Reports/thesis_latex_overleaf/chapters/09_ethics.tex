@@ -1,11 +1,54 @@
 \chapter{Quyền Riêng Tư, Đạo Đức và An Toàn}
 \label{chap:ethics}
 
-\section{Nguyên tắc thiết kế}
-Phân tích transcript họp đòi hỏi consent cụ thể cho mục đích phân tích; consent họp chung không thay thế consent nghiên cứu y tế. Hệ thống giới hạn mục đích ở phân tích nội dung transcript, không dùng để employment/education ranking, kỷ luật hay ra quyết định tự động. Data minimization nghĩa là không giữ audio/video thô khi không cần; raw transcript và evidence phải có retention/deletion policy.
+\section{Mở đầu và phạm vi đánh giá}
+Hệ thống Meeting Intelligence xử lý transcript cuộc họp, siêu dữ liệu cuộc họp và các dự đoán cảm xúc ở mức \emph{analysis unit}. Vì transcript có thể chứa tên riêng, phát biểu cá nhân, ý kiến nghề nghiệp hoặc thông tin nhạy cảm phát sinh trong ngữ cảnh họp, rủi ro không chỉ nằm ở rò rỉ dữ liệu mà còn ở việc diễn giải sai kết quả. Do đó, chương này xem đạo đức như một thuộc tính kiến trúc cần được thiết kế, kiểm thử và vận hành liên tục; không phải là một tuyên bố tuân thủ sau khi hệ thống đã hoàn thành. Cách tiếp cận này phù hợp với các nguyên tắc privacy-by-design \cite{cavoukian2011} và trách nhiệm, minh bạch của hệ thống AI \cite{oecdai2024}.
 
-\section{Kiểm soát và truy vết}
-Khi triển khai, dữ liệu cần được bảo vệ bằng TLS, authorization theo owner/workspace, quản lý secret, và audit truy cập/feedback. Không log secret hoặc raw transcript không cần thiết. Mọi prediction phải có evidence gồm segment ID, revision, timestamp, preprocessing và model version để có thể kiểm tra hoặc xóa theo policy.
+Phạm vi thực nghiệm hiện tại là luồng \emph{Google Meet $\rightarrow$ Vexa $\rightarrow$ FastAPI/PostgreSQL/Valkey $\rightarrow$ worker $\rightarrow$ SSE Dashboard}. Vexa cung cấp sự kiện và bản sao transcript; dịch vụ của đề tài chỉ lưu dữ liệu cần thiết để phân tích, kiểm soát phiên bản transcript và trình bày kết quả. Bộ phân loại đang vận hành là luật xác định \texttt{baseline-rules-v2}; nó không phải công cụ chẩn đoán, không suy luận trạng thái tâm lý của cá nhân và không được dùng để xếp hạng nhân sự, đánh giá học tập, kỷ luật hoặc ra quyết định tự động. Các bộ tích hợp Teams, Zoom, Jitsi và mô hình học máy tùy biến là hướng mở rộng, không phải năng lực đã triển khai.
 
-\section{Giới hạn sử dụng}
-Confidence không phải xác suất một người có vấn đề tâm lý; low coverage và unknown là output hợp lệ. Dashboard không được biến kết quả thành cảnh báo cá nhân. Hệ thống được thiết kế để hỗ trợ các nguyên tắc privacy-by-design \cite{cavoukian2011}, không tuyên bố đã tuân thủ GDPR, EU AI Act hoặc quy định Việt Nam nếu chưa có legal review/DPIA. Nếu nghiên cứu mở rộng sang self-harm hoặc suicidality, phải dừng trước khi có ethics approval, clinical supervisor và crisis-response protocol; keyword alert không phải can thiệp tự động.
+\section{Mô hình rủi ro và nguyên tắc thiết kế}
+Ba lớp đối tượng cần được phân biệt rõ: (i)~dữ liệu gốc, gồm transcript, người nói, thời điểm và trạng thái hiệu đính; (ii)~dữ liệu dẫn xuất, gồm analysis unit, nhãn cảm xúc, confidence, evidence và chỉ số tổng hợp; (iii)~quyết định của con người dựa trên dashboard. Nhãn ở lớp (ii) có thể sai do ASR, ngôn ngữ pha trộn, ngữ cảnh thiếu hoặc quy tắc baseline có độ bao phủ thấp. Vì vậy, một nhãn cảm xúc không được nâng thành kết luận về ý định, năng lực hay sức khỏe của người nói.
+
+Các yêu cầu thiết kế được chuẩn hóa như sau.
+
+\begin{itemize}
+  \item \textbf{Giới hạn mục đích:} chỉ phân tích nội dung transcript để hỗ trợ người được ủy quyền xem lại cuộc họp. Mục đích mới, chẳng hạn chấm điểm nhân viên hay theo dõi hành vi, phải được đánh giá lại về pháp lý, đạo đức và kỹ thuật trước khi sử dụng.
+  \item \textbf{Tối thiểu hóa dữ liệu:} không chủ đích lưu audio/video thô trong dịch vụ phân tích; chỉ giữ transcript, siêu dữ liệu và evidence tối thiểu cần cho truy vết. Mọi trường dữ liệu phải có lý do xử lý và thời hạn lưu tương ứng.
+  \item \textbf{Minh bạch và khả năng phản biện:} dashboard cần hiển thị coverage, trạng thái \texttt{unknown}, evidence, revision transcript, preprocessing và \texttt{model\_version}. Người dùng không nên chỉ nhận một điểm số tổng hợp không có ngữ cảnh.
+  \item \textbf{Giám sát bởi con người:} prediction là thông tin hỗ trợ, không kích hoạt hành động bất lợi hay cảnh báo cá nhân tự động. Người đọc phải kiểm tra transcript và ngữ cảnh trước khi đưa ra nhận định.
+  \item \textbf{Trách nhiệm giải trình:} phiên bản mô hình, cấu hình tiền xử lý, nguồn sự kiện và kết quả worker được lưu để tái lập một lần chạy. Đây là nền tảng kỹ thuật cho audit, sửa dữ liệu và điều tra sự cố, nhưng chưa tự động tạo ra sự tuân thủ pháp lý.
+\end{itemize}
+
+Các nguyên tắc này tương thích với yêu cầu về mục đích cụ thể, mức dữ liệu phù hợp và trách nhiệm của bên kiểm soát dữ liệu trong Nghị định 13/2023/NĐ-CP \cite{decree132023}; đồng thời có tính tham chiếu với GDPR \cite{gdpr2016}. Việc áp dụng cho một tổ chức cụ thể vẫn cần tư vấn pháp lý và đánh giá tác động bảo vệ dữ liệu (DPIA), đặc biệt khi phạm vi xử lý, quốc gia triển khai hoặc đối tượng sử dụng thay đổi.
+
+\section{Consent, quản trị dữ liệu và quyền của chủ thể dữ liệu}
+Việc tham dự một cuộc họp không mặc nhiên đồng nghĩa với đồng ý cho việc sao chép transcript, phân tích cảm xúc và lưu kết quả dẫn xuất. Trước khi kết nối nguồn dữ liệu, bên triển khai cần thông báo bằng ngôn ngữ dễ hiểu về nguồn thu thập, mục đích phân tích, loại dữ liệu, nơi lưu trữ, đối tượng có quyền truy cập, thời hạn lưu, đầu mối liên hệ và cách rút hoặc thay đổi sự đồng ý. Consent cần được ghi nhận tách biệt với thông báo lịch họp; khi cơ sở xử lý không phải consent, cơ sở đó cũng cần được xác định và rà soát theo thẩm quyền pháp lý phù hợp \cite{decree132023}.
+
+Trong nghiên cứu, dữ liệu thật không nên được đưa vào Git, tài liệu công khai, log CI/CD hoặc bộ kiểm thử. Các smoke test của đề tài sử dụng fixture tổng hợp và xóa dữ liệu kiểm thử sau khi xác nhận kết quả. Nếu cần dùng transcript thật để đánh giá, cần có quy trình tuyển chọn, khử định danh, phân quyền và phê duyệt đạo đức riêng. Người vận hành cũng cần xác định rõ vai trò giữa tổ chức sở hữu cuộc họp, nhà cung cấp nền tảng họp, Vexa và dịch vụ phân tích; không giả định rằng điều khoản của một nền tảng tự động bao phủ toàn bộ chuỗi xử lý tiếp theo.
+
+\section{Kiểm soát dữ liệu theo vòng đời hệ thống}
+Thiết kế hiện tại tạo một số điểm kiểm soát hữu ích, nhưng các điểm đó không thay thế một chương trình bảo vệ dữ liệu hoàn chỉnh.
+
+\begin{description}
+  \item[Thu thập và nhập liệu.] FastAPI nhận webhook Vexa có kiểm tra HMAC SHA-256, timestamp và cơ chế chống gửi lặp; dashboard không nắm API key của Vexa. Chỉ adapter Google Meet đang có trong mã nguồn. Khi bổ sung Teams, Zoom hoặc Jitsi, mỗi adapter phải được đánh giá lại về scope OAuth, webhook, dữ liệu nhận được và điều khoản nền tảng.
+  \item[Lưu trữ và xử lý.] PostgreSQL là nguồn dữ liệu chuẩn cho meeting, revision transcript, analysis run và evidence; Valkey chỉ dùng cho hàng đợi/phát tán công việc. Worker chỉ phân tích segment cuối cùng, không bị thu hồi và đã qua quality gate. Việc bỏ các đoạn không đủ điều kiện hoặc gán \texttt{unknown} làm giảm nguy cơ tạo nhãn giả, nhưng không xóa bỏ thiên lệch từ ASR hay dữ liệu đầu vào.
+  \item[Truy cập và trình bày.] Dashboard nhận cập nhật qua SSE; trong cấu hình phát triển, backend và dashboard được bind vào loopback. Cơ chế định danh hiện có \texttt{X-App-User-Id} chỉ phục vụ phát triển, chưa phải authentication/authorization đủ cho môi trường thật. Triển khai thực tế cần TLS đầu cuối, SSO/OIDC hoặc cơ chế tương đương, RBAC theo workspace/owner, quản lý secret, audit log và kiểm soát xuất dữ liệu.
+  \item[Lưu giữ và xóa.] Dự án đã lưu revision và evidence để truy vết, nhưng chưa triển khai retention schedule, workflow export/correction/deletion, xóa bản sao lưu hay chứng minh xóa dữ liệu. Đây là các hạng mục bắt buộc phải được thiết kế và kiểm thử trước khi xử lý dữ liệu thật lâu dài; không được suy diễn rằng việc không lưu audio/video đồng nghĩa không còn rủi ro từ transcript.
+\end{description}
+
+\section{Công bằng, độ tin cậy và diễn giải kết quả}
+Độ chính xác của suy luận cảm xúc phụ thuộc vào chất lượng nhận dạng tiếng nói, phương ngữ, chuyển mã ngôn ngữ, thuật ngữ chuyên môn, số người nói và phần ngữ cảnh còn thiếu. Một mô hình hoặc rule được đánh giá tốt trên một tập dữ liệu không tự động công bằng với các nhóm người dùng khác; việc báo cáo chỉ một accuracy chung có thể che khuất sai số theo ngôn ngữ hoặc điều kiện âm thanh. Do đó, khi triển khai mô hình học máy tùy biến trong tương lai, tập đánh giá cần được mô tả bằng \emph{datasheet} \cite{gebru2021}, báo cáo theo lát cắt phù hợp và xem xét calibration, coverage, false positive/false negative thay vì chỉ tối ưu một chỉ số tổng hợp.
+
+Ở MVP, \texttt{baseline-rules-v2} được lựa chọn vì tính xác định và dễ audit, không phải vì đã chứng minh vượt trội về chất lượng. \texttt{Confidence} của output không được diễn giải như xác suất một người ``có cảm xúc tiêu cực''; \texttt{unknown} và low coverage là kết quả hợp lệ cần hiển thị rõ. Dashboard không được biến tổng hợp theo speaker thành bảng xếp hạng, tín hiệu giám sát hoặc cơ sở cho quyết định có hậu quả. Các giới hạn này giúp tránh vòng phản hồi, hiệu ứng bị giám sát và việc dùng hệ thống vượt quá mục tiêu nghiên cứu ban đầu.
+
+\section{Ranh giới với an toàn và sức khỏe tâm thần}
+Sentiment trong transcript khác với sàng lọc hoặc chẩn đoán lâm sàng. Những công cụ như PHQ-9 có quy trình thẩm định riêng \cite{kroenke2001}, còn tiêu chuẩn chẩn đoán yêu cầu đánh giá chuyên môn và ngữ cảnh lâm sàng \cite{dsm5}. Vì vậy, hệ thống không được suy luận trầm cảm, nguy cơ tự hại hay tình trạng sức khỏe tâm thần từ nhãn cảm xúc, keyword hoặc confidence. Không có tính năng cảnh báo khủng hoảng tự động trong phạm vi đề tài.
+
+Nếu nghiên cứu trong tương lai mở rộng sang tự hại hoặc suicidality, công việc phải dừng trước khi thu thập/triển khai cho đến khi có phê duyệt ethics, người phụ trách chuyên môn lâm sàng, quy trình phản ứng khẩn cấp, cơ chế chuyển tuyến, đánh giá false alarm/missed detection và bảo vệ người tham gia. Keyword alert đơn thuần không phải là can thiệp an toàn.
+
+\section{Trạng thái hiện tại và điều kiện trước triển khai thực tế}
+MVP đã có provenance cho prediction (segment ID, revision, timestamp, preprocessing version và model version), quality gate, webhook signing, tách dashboard khỏi Vexa key và nguyên tắc không tự động ra quyết định. Tuy nhiên, hệ thống \textbf{chưa} tuyên bố tuân thủ GDPR, EU AI Act, Nghị định 13/2023/NĐ-CP hay bất kỳ khuôn khổ nào khác; chưa có DPIA, review pháp lý, consent-management, RBAC/SSO sản xuất, retention/deletion workflow, audit trail hoàn chỉnh hoặc đánh giá fairness trên dữ liệu thật.
+
+Trước khi vận hành ngoài phạm vi MVP, nhóm triển khai cần tối thiểu: xác lập data controller/processor và mục đích xử lý; hoàn tất DPIA và chính sách consent/retention; kiểm thử phân quyền, TLS, backup/restore và quy trình xóa; công bố hướng dẫn sử dụng cùng ranh giới diễn giải; lập quy trình báo cáo sự cố, phản hồi khiếu nại và đánh giá định kỳ model/data drift. Các điều kiện này biến nguyên tắc đạo đức thành tiêu chí nghiệm thu hệ thống có thể kiểm chứng, thay vì chỉ là cam kết trong tài liệu.
+
+Các ràng buộc trên cũng định nghĩa phạm vi của kết luận nghiên cứu ở Chương~\ref{chap:conclusion}: MVP được kết luận về thiết kế và kiểm chứng luồng xử lý có evidence, không được kết luận về hiệu quả lâm sàng, chất lượng sentiment trên dữ liệu thật hay mức độ tuân thủ pháp lý. Việc liên kết yêu cầu đạo đức với tiêu chí nghiệm thu kỹ thuật giúp bảo đảm mỗi năng lực mở rộng đều có thể được đánh giá về lợi ích, rủi ro và bằng chứng vận hành trước khi được đưa vào sử dụng.

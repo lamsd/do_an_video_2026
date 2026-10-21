@@ -1,31 +1,86 @@
 \chapter{Tổng Quan Nghiên Cứu và Cơ Sở Lý Thuyết}
 \label{chap:literature}
 
-\section{Phân biệt sentiment, emotion và sàng lọc lâm sàng}
-Sentiment trả lời nội dung biểu đạt tích cực, trung tính hay tiêu cực. Emotion/intent là bài toán đa nhãn về sắc thái hoặc mục đích giao tiếp và cần guideline riêng. Sàng lọc triệu chứng trầm cảm yêu cầu công cụ tự báo cáo như PHQ-9, đúng cửa sổ thời gian và protocol lâm sàng \cite{kroenke2001}; chẩn đoán theo DSM-5 còn đòi hỏi đánh giá chuyên môn \cite{dsm5}. Vì thế, không có phép ánh xạ trực tiếp từ một câu transcript sang tiêu chí DSM-5 hay PHQ-9 trong nghiên cứu này.
+Chương này hệ thống hóa các khái niệm cần thiết để thiết kế ứng dụng phân tích sentiment từ transcript họp trực tuyến. Trọng tâm là sự phù hợp giữa bài toán phân tích ngôn ngữ, chất lượng dữ liệu ASR và các cơ chế hệ thống để kết quả có thể truy vết. Các nội dung về mô hình, đa nền tảng và vận hành được trình bày như cơ sở thiết kế; chúng không thay thế bằng chứng thực nghiệm được báo cáo ở Chương~\ref{chap:experiments}.
 
-\begin{table}[H]\centering
-\caption{Ranh giới giữa các lớp bài toán}
+\section{Sentiment analysis trong bối cảnh transcript họp}
+\subsection{Khái niệm và đơn vị phân tích}
+Sentiment analysis, hay opinion mining, là nhóm kỹ thuật xác định khuynh hướng đánh giá hoặc sắc thái biểu đạt trong văn bản \cite{pang2008}. Trong khóa luận này, bài toán được giới hạn ở phân loại polarity ba lớp \textit{positive}, \textit{neutral} và \textit{negative} trên một \emph{analysis unit}; lớp \textit{unknown} biểu thị dữ liệu không đủ điều kiện hoặc không thuộc miền/ngôn ngữ mà adapter hỗ trợ. Như vậy, \textit{unknown} là một trạng thái an toàn của hệ thống, không phải một lớp sentiment.
+
+Việc chọn analysis unit thay vì một token, một câu đơn lẻ hoặc toàn bộ cuộc họp là quyết định thiết kế nhằm cân bằng ngữ cảnh và độ trễ. Một unit được xây dựng từ tối đa ba final segment liền kề của cùng người nói, trong giới hạn thời gian của pipeline. Cách ghép này có thể giữ lại phủ định hoặc bổ ngữ nằm ở segment lân cận, đồng thời không gom nhiều lượt thoại khác người nói vào cùng một dự đoán. Tuy nhiên, unit vẫn không đủ để diễn giải ý định, mỉa mai hoặc quan hệ xã hội; các hiện tượng đó chỉ có thể được đánh giá khi có guideline và dữ liệu gán nhãn phù hợp.
+
+\subsection{Phân biệt các lớp bài toán}
+Sentiment, emotion, intent và đánh giá lâm sàng có mục tiêu, nhãn và yêu cầu dữ liệu khác nhau. Sự phân biệt này cần được duy trì từ khâu thu thập dữ liệu đến giao diện người dùng để tránh suy diễn vượt quá bằng chứng.
+
+\begin{table}[H]
+\centering
+\caption{Ranh giới giữa các lớp bài toán liên quan đến transcript}
 \label{tab:task-boundary}
-\begin{tabularx}{\linewidth}{lXX}
+\begin{tabularx}{\linewidth}{p{0.19\linewidth}XX}
 \toprule
-Bài toán & Nhãn/dữ liệu cần có & Phạm vi khóa luận\\ \midrule
-Sentiment & Nhãn cấp analysis unit & Mục tiêu thiết kế của ứng dụng\\
-Emotion/intent & Multi-label và guideline & Hướng mở rộng\\
-Sàng lọc trầm cảm & PHQ-9, consent, protocol lâm sàng & Ngoài phạm vi\\ \bottomrule
-\end{tabularx}\end{table}
+Bài toán & Đầu ra/dữ liệu cần có & Quan hệ với khóa luận \\ \midrule
+Sentiment & Polarity ở cấp analysis unit; guideline gán nhãn theo ngữ cảnh họp & Bài toán đích của kiến trúc ứng dụng \\
+Emotion/intent & Nhiều nhãn cảm xúc hoặc mục đích phát ngôn; dữ liệu và guideline riêng & Hướng mở rộng, không suy ra từ nhãn sentiment \\
+Tóm tắt/đánh giá cuộc họp & Ngữ cảnh nhiều lượt thoại, mục tiêu cuộc họp và tiêu chí đánh giá riêng & Không phải đầu ra của classifier hiện tại \\
+Sàng lọc lâm sàng & Công cụ đã được thẩm định, khoảng thời gian xác định, consent và chuyên môn lâm sàng & Ngoài phạm vi \\ \bottomrule
+\end{tabularx}
+\end{table}
 
-\section{Transformer, BERT và PhoBERT}
-Transformer sử dụng self-attention để học quan hệ ngữ cảnh song song \cite{vaswani2017}:
+PHQ-9 là công cụ tự báo cáo trong một cửa sổ thời gian xác định \cite{kroenke2001}; chẩn đoán còn đòi hỏi đánh giá chuyên môn theo DSM-5 \cite{dsm5}. Vì vậy, không có phép ánh xạ trực tiếp từ sentiment của một transcript sang tiêu chí PHQ-9, DSM-5 hoặc trạng thái sức khỏe tâm thần của người nói. Hệ thống không được thiết kế để xếp hạng con người hoặc hỗ trợ quyết định học tập, tuyển dụng hay việc làm.
+
+\section{Transcript ASR và kiểm soát chất lượng dữ liệu}
+\subsection{Nguồn sai lệch của transcript}
+ASR biến tín hiệu âm thanh thành chuỗi ký tự; các hệ thống hiện đại có thể hoạt động trên dữ liệu đa ngôn ngữ ở quy mô lớn \cite{whisper2022}. Tuy nhiên, chất lượng transcript còn chịu ảnh hưởng của tiếng ồn, vọng âm, lời nói chồng lấn, tốc độ nói, tên riêng, từ viết tắt, chuyển mã ngôn ngữ và lỗi diarization. Với họp trực tuyến, một lỗi nhỏ cũng có thể đảo polarity, ví dụ làm mất từ phủ định hoặc gán phát ngôn sang sai speaker. Do đó, transcript phải được xem là dữ liệu quan sát có sai số, không phải ground truth ngôn ngữ.
+
+Khi có audio gốc và bản chép chuẩn tương ứng, Word Error Rate (WER) có thể được xác định bởi:
+\begin{equation}
+  WER = \frac{S + D + I}{N},
+\end{equation}
+trong đó $S$, $D$, $I$ lần lượt là số lỗi thay thế, xóa và chèn; $N$ là số từ trong bản chép chuẩn. Với tiếng Việt, việc định nghĩa token và quy tắc tách từ phải được cố định trước khi so sánh. WER/CER chỉ phản ánh sai khác so với ground truth đã chọn; chúng không trực tiếp đo đúng--sai của nhãn sentiment. Vì MVP chưa có audio và ground truth được thiết kế để benchmark, khóa luận không báo cáo WER/CER.
+
+\subsection{Quality gate, language routing và coverage}
+Trước suy luận, hệ thống chuẩn hóa Unicode NFC và khoảng trắng, đồng thời giữ nguyên dấu tiếng Việt. Quality gate đánh giá ít nhất các điều kiện: text rỗng, số từ quá ít, duration âm, segment chưa final, segment bị retracted và mẫu hallucination đã biết. Language router chỉ chuyển unit tiếng Việt đến adapter hiện hành; trường hợp khác hoặc không chắc chắn được giữ \textit{unknown}. Segment bị loại vẫn lưu text đã chuẩn hóa và lý do loại để có thể audit, thay vì bị xóa hoặc ép thành \textit{neutral}.
+
+Để tránh diễn giải nhầm một tỷ lệ dự đoán cao là toàn bộ transcript đã được xử lý, hệ thống tách ba chỉ số. Với $T$ là tổng số đơn vị được xem xét trước quality gate, $A$ là số unit được chấp nhận và $P$ là số unit có nhãn khác \textit{unknown}, hệ thống định nghĩa:
+\begin{equation}
+  acceptance\_rate=\frac{A}{T},\qquad prediction\_coverage=\frac{P}{A},\qquad effective\_coverage=\frac{P}{T}.
+\end{equation}
+Các tỷ lệ có mẫu số bằng 0 được báo là $0$ kèm trạng thái ``không có đơn vị phù hợp'', không được suy diễn thành tỷ lệ sentiment. \emph{Prediction coverage} thấp có thể do routing, ngưỡng confidence hoặc adapter; \emph{acceptance rate} thấp phản ánh chất lượng đầu vào; còn \emph{effective coverage} cho biết phần nội dung ban đầu thực sự nhận được dự đoán. Backend lưu cả ba chỉ số; dashboard hiện giữ \emph{prediction coverage} để tương thích và cần bổ sung hai chỉ số còn lại trước khi công bố kết quả vận hành.
+
+\section{Nền tảng mô hình ngôn ngữ và custom model}
+\subsection{Các lựa chọn mô hình cho tiếng Việt}
+Transformer dùng self-attention để biểu diễn quan hệ ngữ cảnh \cite{vaswani2017}:
 \begin{equation}
 \mathrm{Attention}(Q,K,V)=\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
 \end{equation}
-BERT là encoder Transformer được pre-train bằng masked language modeling \cite{devlin2019}. PhoBERT là mô hình tiền huấn luyện chuyên cho tiếng Việt \cite{phobert2020}. Với PhoBERT, tokenizer/checkpoint và bước word segmentation tương thích phải được sử dụng cùng nhau; không nên áp dụng stem hoặc bỏ stopword như một tiền xử lý mặc định.
+BERT là encoder Transformer được tiền huấn luyện bằng masked language modeling \cite{devlin2019}; PhoBERT là mô hình tiền huấn luyện chuyên cho tiếng Việt \cite{phobert2020}. Khi dùng PhoBERT, tokenizer, checkpoint và bước word segmentation phải tương thích; không áp dụng stemming hay loại stopword một cách mặc định vì có thể làm mất thông tin phủ định và ngữ cảnh.
 
-PhoBERT là lựa chọn hợp lý khi tích hợp mô hình cho tiếng Việt, nhưng không mặc nhiên là mô hình tốt nhất cho transcript họp. TF--IDF + Logistic Regression, PhoBERT và mBERT/XLM-R là các lựa chọn cần được đánh giá trên cùng tập dữ liệu mục tiêu trước khi thay runtime \cite{xlmr2020}. Khóa luận trình bày các lựa chọn này để định hướng adapter và tối ưu hóa sau này, không công bố một phép so sánh thực nghiệm giữa chúng.
+TF--IDF kết hợp Logistic Regression, PhoBERT fine-tune và mBERT/XLM-R là các hướng so sánh hợp lý khi có dataset đúng task \cite{xlmr2020}. Không có mô hình nào mặc nhiên tốt nhất cho transcript họp: khác biệt về miền dữ liệu, cách ghi transcript, phân bố lớp và quy tắc gán nhãn có thể làm thay đổi kết quả. Vì vậy, PhoBERT trong khóa luận là một ứng viên tích hợp, không phải kết quả benchmark đã đạt.
 
-\section{Transcript ASR và quality gate}
-ASR có thể tạo lỗi nhận dạng từ tiếng ồn, echo, diarization, VAD, code-switching hoặc hallucination. WER/CER chỉ được báo cáo khi có audio và ground truth phù hợp; một file transcript minh họa không phải benchmark ASR. Quality gate trong hệ thống loại segment rỗng, quá ngắn, duration không hợp lệ, trùng lặp, hallucination đã biết, nội dung không thuộc cuộc họp hoặc sai ngôn ngữ. Các segment không đủ điều kiện được lưu lý do và trả \textit{unknown}, thay vì ép về lớp neutral.
+\subsection{Hợp đồng adapter và vòng đời custom model}
+Để tách phần hệ thống khỏi thuật toán, worker gọi giao diện \texttt{SentimentClassifier} thay vì phụ thuộc vào một framework mô hình cụ thể. Adapter nhận các analysis unit và trả về label, confidence, phân bố lớp (nếu có), polarity và model version. Nhờ hợp đồng này, baseline, mô hình PhoBERT hoặc custom model theo miền nghiệp vụ có thể được thay thế mà không sửa API, schema persistence hay dashboard.
 
-\section{Nguyên tắc thiết kế có trách nhiệm}
-Consent, tối thiểu hóa dữ liệu, kiểm soát truy cập, auditability và human oversight là yêu cầu thiết kế. Hệ thống được thiết kế để hỗ trợ các nguyên tắc bảo vệ dữ liệu, không tuyên bố tuân thủ GDPR, AI Act hay pháp luật Việt Nam khi chưa có legal review/DPIA. EU AI Act có thể được tham chiếu như bối cảnh quản trị AI \cite{euaiact2024}.
+Một custom model chỉ nên được đưa vào serving khi có artifact bất biến, version rõ ràng, mô tả task/nhãn/ngôn ngữ, preprocessing tương ứng, tập đánh giá độc lập và điều kiện rollback. Model cards đề xuất việc công bố mục đích sử dụng, giới hạn và kết quả đánh giá của mô hình \cite{mitchell2019}; tương tự, datasheets hỗ trợ ghi nhận nguồn gốc, cách thu thập và điều kiện sử dụng dữ liệu \cite{gebru2021}. Các tài liệu này là cơ sở quản trị cho model và dataset, không phải bằng chứng rằng custom model đã được huấn luyện trong MVP.
+
+Confidence do model xuất ra không tự động là xác suất đã calibration. Các mạng nơ-ron hiện đại có thể over-confident, do đó cần đo calibration trên tập validation/test độc lập trước khi diễn giải confidence như xác suất đúng \cite{guo2017}. Trong runtime \texttt{baseline-rules-v2}, confidence chỉ là điểm theo luật; nó không có ý nghĩa calibration và không phải thước đo về con người.
+
+\section{Cơ sở thiết kế hệ thống có thể truy vết}
+\subsection{Hợp đồng dữ liệu, revision và evidence}
+Mỗi transcript segment được định danh bởi khóa nguồn trong một meeting và lưu text, speaker, timestamp, trạng thái final/retracted và revision. Khi text, speaker hoặc thời gian thay đổi, hệ thống tăng revision thay vì ghi đè mất lịch sử. Một analysis run gắn với source revision, model version và preprocessing version; prediction tiếp tục liên kết với unit và các segment nguồn. Chuỗi liên kết này tạo \emph{evidence} cho phép người dùng đối chiếu một aggregate với văn bản, thời điểm và phiên bản xử lý đã sinh ra nó.
+
+Tính truy vết đặc biệt quan trọng với transcript vì cùng một meeting có thể được nguồn cập nhật muộn hoặc sửa lại. Nếu chỉ lưu nhãn cuối cùng, hệ thống không thể trả lời nhãn đó được tạo từ bản transcript nào hoặc model nào. Ngược lại, revision và versioning cho phép supersede kết quả cũ, chạy lại phân tích khi có model mới và rollback mà không làm sai lệch lịch sử.
+
+\subsection{Luồng sự kiện và cập nhật gần thời gian thực}
+Kiến trúc MVP sử dụng PostgreSQL làm nguồn dữ liệu chuẩn. Sau khi transaction ghi segment hoặc kết quả phân tích được commit, outbox event bền vững được tạo để worker hoặc dashboard có thể tiêu thụ; Valkey Stream được dùng cho queue/fan-out, không phải nơi lưu dữ liệu chính. Khóa idempotency \texttt{(meeting\_id, kind, source\_revision, model\_version)} hạn chế việc chạy lặp cùng một tác vụ phân tích khi có retry.
+
+Worker xử lý bất đồng bộ để REST/SSE không bị chặn bởi quality gate hoặc inference. Sau khi aggregate cập nhật, backend phát sự kiện cho dashboard qua SSE. SSE là cơ chế HTTP một chiều từ server đến client, được chuẩn hóa để nhận luồng thông báo dạng event \cite{sse2015}; nó phù hợp với nhu cầu dashboard chủ yếu nhận cập nhật. Kiến trúc này chỉ cho phép tuyên bố \emph{near-real-time} khi chưa có số liệu đo đầy đủ cho toàn bộ đường đi audio--transcript--dashboard.
+
+\subsection{Mở rộng đa nền tảng}
+Lõi phân tích cần độc lập với nền tảng họp. Theo thiết kế mở rộng, Google Meet, Microsoft Teams, Zoom và Jitsi Meet được đặt ở lớp \emph{platform adapter}; adapter chuẩn hóa định danh meeting, speaker, timestamp, text, \texttt{is\_final} và revision trước khi gửi vào pipeline chung. Mỗi adapter phải xử lý riêng cơ chế xác thực, quyền truy cập, consent, rate limit, định dạng webhook/polling và đặc tính transcript của nền tảng nguồn.
+
+MVP hiện chỉ hiện thực và kiểm chứng luồng Google Meet kết hợp Vexa ở môi trường cục bộ. Teams, Zoom và Jitsi Meet không phải chức năng đã triển khai; chúng chỉ trở thành phạm vi triển khai khi từng adapter có contract nguồn, kiểm thử tích hợp, kiểm soát quyền riêng tư và đánh giá độ tin cậy riêng. Cách diễn đạt này tránh suy diễn từ khả năng mở rộng của schema sang khả năng tương tác đã được chứng minh.
+
+\section{Nguyên tắc nghiên cứu và triển khai có trách nhiệm}
+Transcript họp có thể chứa dữ liệu cá nhân, bí mật kinh doanh hoặc thông tin nhạy cảm. Vì vậy, consent, mục đích sử dụng xác định, tối thiểu hóa dữ liệu, kiểm soát truy cập, retention/deletion và auditability là yêu cầu thiết kế. Privacy by design nhấn mạnh việc đưa bảo vệ riêng tư vào vòng đời hệ thống \cite{cavoukian2011}; GDPR cũng đặt ra các nguyên tắc xử lý dữ liệu cá nhân như giới hạn mục đích và tối thiểu hóa dữ liệu \cite{gdpr2016}.
+
+Ứng dụng được thiết kế để hỗ trợ các nguyên tắc trên, không tuyên bố tuân thủ GDPR, AI Act hay pháp luật Việt Nam khi chưa có legal review và đánh giá tác động bảo vệ dữ liệu. EU AI Act có thể được dùng làm bối cảnh quản trị AI \cite{euaiact2024}, nhưng việc áp dụng cho một deployment cụ thể cần phân tích theo mục đích sử dụng, vai trò các bên và khu vực pháp lý. Trong mọi trường hợp, output sentiment phải được hiển thị như tín hiệu về nội dung transcript, có evidence để rà soát và có human oversight; không được dùng như kết luận tự động về cá nhân.

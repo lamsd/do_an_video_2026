@@ -1,0 +1,17 @@
+{
+  "dataset_version": "meeting-sentiment-consented-v1",
+  "dataset_kind": "consented-meeting-transcript-sentiment",
+  "source": "Vexa/Google Meet pilot đã được phê duyệt",
+  "license_or_consent": "Tham chiếu hồ sơ consent/quyền sử dụng nội bộ, không ghi PII vào manifest.",
+  "collection_period": "2026-10-01 đến 2026-10-31",
+  "redaction_policy": "Redaction v1: loại PII, URL private, secret và dữ liệu ngoài phạm vi.",
+  "label_guideline_version": "meeting-polarity-guideline-v1",
+  "annotation_policy": "Hai annotator độc lập, adjudication cho bất đồng, lưu agreement aggregate.",
+  "split_policy": "Chia theo meeting_id trước tuning; một meeting chỉ thuộc một split; test bị khoá.",
+  "meeting_id_policy": "ID nội bộ ổn định, không chứa tên người hoặc meeting URL.",
+  "output_sha256": {
+    "train": "<sha256-của-train.csv>",
+    "validation": "<sha256-của-validation.csv>",
+    "test": "<sha256-của-test.csv>"
+  }
+}

@@ -1,18 +1,95 @@
 \chapter{Kiến Trúc Backend và Tích Hợp Hệ Thống}
 \label{chap:backend}
 
-\section{Kiến trúc MVP}
-MVP dùng kiến trúc event-driven có nguồn dữ liệu chính là PostgreSQL:
-\begin{center}
-Vexa $\rightarrow$ FastAPI backend $\rightarrow$ PostgreSQL/outbox $\rightarrow$ Valkey Stream $\rightarrow$ sentiment worker $\rightarrow$ aggregate/outbox $\rightarrow$ SSE $\rightarrow$ dashboard.
-\end{center}
-Backend tiếp nhận và reconcile transcript; browser không gọi Vexa trực tiếp và không lộ Vexa API key. Valkey/Redis chỉ phục vụ queue và fan-out, không thay PostgreSQL làm source of truth. Worker tách FastAPI để quá trình xử lý không chặn REST/SSE. Điểm tích hợp mô hình được đóng gói qua classifier adapter; vì vậy thay model không làm thay đổi luồng dữ liệu hay dashboard.
+Backend là lớp ranh giới giữa nền tảng transcript, dữ liệu ứng dụng, worker phân tích và dashboard. Mục tiêu thiết kế không phải là thay thế nhà cung cấp họp trực tuyến, mà là tiếp nhận dữ liệu có kiểm soát, duy trì bản ghi thuộc sở hữu ứng dụng, điều phối phân tích bất đồng bộ và trả kết quả có evidence. Chương này mô tả implementation MVP trên FastAPI, PostgreSQL, Valkey và Vexa; các thành phần production nâng cao được tách rõ khỏi phạm vi đã kiểm chứng.
 
-\section{Persistence, idempotency và revision}
-Các thực thể chính gồm meeting, transcript segment, analysis run, analysis unit, prediction, aggregate window và outbox event. Idempotency key là \texttt{(meeting\_id, kind, source\_revision, model\_version)}. Segment được upsert theo khóa nguồn; thay đổi text, speaker hoặc thời gian tạo revision mới. Kết quả gắn evidence và version để có thể audit, còn kết quả lỗi thời được supersede.
+\section{Yêu cầu thiết kế và nguyên tắc kiến trúc}
+API HTTP cung cấp giao diện tài nguyên meeting, transcript và analytics cho dashboard. Phong cách REST nhấn mạnh interface thống nhất, triển khai độc lập các thành phần và khả năng đặt intermediary tại ranh giới hệ thống \cite{fielding2000}; trong dự án, FastAPI là intermediary này giữa browser, Vexa và các store do ứng dụng quản lý. Tuy nhiên, việc dùng HTTP endpoint không tự động làm một hệ thống ``RESTful'' hay an toàn; các ràng buộc về ownership, idempotency, chữ ký webhook và dữ liệu bền vững vẫn phải được hiện thực riêng.
 
-\section{Luồng phân tích}
-Khi final segment đến, backend phát sự kiện bền vững qua outbox. Worker đọc queue, chạy quality gate, xây analysis unit và gọi classifier adapter; kết quả bao gồm label, điểm confidence nếu adapter cung cấp, reason, model version và processing latency. Sau khi aggregate cập nhật, sự kiện \texttt{analysis.sentiment.updated} được phát qua SSE. Reconcile REST là fallback; WebSocket Vexa là giai đoạn kế tiếp khi source contract đã được kiểm chứng.
+Các quyết định thiết kế chính được tóm tắt ở Bảng~\ref{tab:backend-design}. Chúng hướng tới khả năng truy vết và khôi phục trước khi tối ưu hóa thông lượng hoặc mở rộng hạ tầng.
 
-\section{Phạm vi tích hợp}
-Tích hợp đã kiểm chứng là Google Meet kết hợp Vexa trong môi trường local. Zoom, Teams, Jitsi, capture audio trực tiếp, gateway nhiều microservice, JWT/OAuth, ONNX quantization, dynamic batching và auto-alert không được mô tả như chức năng đã triển khai. Chúng là các lựa chọn kiến trúc chỉ được thực hiện sau khi có yêu cầu, consent và benchmark tương ứng.
+\begin{table}[H]
+\centering
+\caption{Yêu cầu kiến trúc backend và cơ chế hiện thực trong MVP}
+\label{tab:backend-design}
+\begin{tabularx}{\linewidth}{p{0.26\linewidth}XX}
+\toprule
+Yêu cầu & Cơ chế hiện thực & Giới hạn hiện tại \\ \midrule
+Ownership và phân quyền dữ liệu & Meeting gắn \texttt{owner\_id}; mọi API đọc/ghi meeting kiểm tra ownership & \texttt{X-App-User-Id} là identity development, chưa phải JWT/OAuth \\
+Nguồn dữ liệu bền vững & PostgreSQL lưu meeting, segment, revision, run, unit, prediction, aggregate và outbox & Chưa có backup/restore drill hoặc HA được kiểm chứng \\
+Không chặn API khi phân tích & Valkey Stream và worker tách riêng xử lý analysis run & Chưa có load test, autoscaling hay dynamic batching \\
+Idempotency và retry & Unique constraint cho segment, webhook, analysis run và outbox dedupe key & Semantics delivery cần được đánh giá thêm ở quy mô production \\
+Truy vết kết quả & Source revision, preprocessing/model version, evidence và \texttt{is\_current} & Chưa có model registry/MLflow runtime \\
+Delivery gần thời gian thực & SSE phát event outbox; dashboard refresh API theo meeting & SSE hiện poll outbox mỗi giây; chưa có WebSocket/direct push \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Kiến trúc logic và luồng tích hợp}
+Hình~\ref{fig:backend-architecture} cho thấy các boundary chính. Browser không gọi Vexa và không chứa Vexa API key. Vexa chỉ giao tiếp với backend qua client server-side, webhook và REST reconcile. PostgreSQL là source of truth; Valkey Stream chỉ nhận định danh analysis run để worker xử lý. Sau khi worker commit prediction/aggregate, backend cung cấp SSE và API analytics cho dashboard.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=10mm and 14mm,
+  external/.style={draw=primaryblue, rounded corners=2pt, fill=lightblue, align=center, minimum width=31mm, minimum height=12mm},
+  service/.style={draw=accentblue, rounded corners=2pt, fill=accentblue!12, align=center, minimum width=32mm, minimum height=12mm},
+  store/.style={draw=primaryblue, cylinder, shape border rotate=90, aspect=0.28, fill=primaryblue!12, align=center, minimum width=27mm, minimum height=15mm},
+  future/.style={draw=gray, dashed, rounded corners=2pt, fill=gray!10, align=center, minimum width=32mm, minimum height=12mm},
+  flow/.style={-{Stealth[length=2.2mm]}, thick, draw=primaryblue},
+  event/.style={-{Stealth[length=2.2mm]}, thick, draw=accentblue},
+  optional/.style={-{Stealth[length=2.2mm]}, thick, draw=gray, dashed}
+]
+  \node[external] (dash) {Dashboard\\browser};
+  \node[service, right=of dash] (api) {FastAPI backend\\REST + SSE + webhook};
+  \node[external, above=of api] (vexa) {Vexa\\bot + transcript};
+  \node[store, right=of api] (db) {PostgreSQL\\application data\\+ outbox};
+  \node[store, right=of db] (valkey) {Valkey Stream\\analysis jobs};
+  \node[service, below=of valkey] (worker) {Sentiment worker\\quality + adapter};
+  \node[future, below=of api] (ext) {OAuth/JWT, MLflow,\\platform adapters (đề xuất)};
+
+  \draw[flow] (dash) -- node[above, font=\scriptsize]{REST/SSE} (api);
+  \draw[flow] (vexa) -- node[right, font=\scriptsize]{webhook/REST} (api);
+  \draw[flow] (api) -- node[above, font=\scriptsize]{transaction} (db);
+  \draw[event] (db) -- node[above, font=\scriptsize]{enqueue run} (valkey);
+  \draw[event] (valkey) -- (worker);
+  \draw[event] (worker.west) -| node[pos=0.75, below, font=\scriptsize]{prediction, aggregate, outbox} (db.south);
+  \draw[optional] (ext) -- (api);
+\end{tikzpicture}%
+}
+\caption{Kiến trúc logic backend của MVP. Nét đứt: hướng mở rộng chưa được hiện thực/kiểm chứng.}
+\label{fig:backend-architecture}
+\end{figure}
+
+Luồng tạo meeting bắt đầu từ \texttt{POST /v1/meetings}. Backend chỉ chấp nhận URL Google Meet đúng định dạng trong MVP, kiểm tra một meeting đang hoạt động cùng owner để request retry không spawn bot trùng, sau đó gọi Vexa bằng API key server-side. Các endpoint \texttt{/sync}, \texttt{/transcript}, \texttt{/analysis} và \texttt{/analytics/*} chỉ thao tác trên meeting thuộc owner đang gọi. Việc giới hạn API hiện tại ở Google Meet là chủ đích: Teams, Zoom và Jitsi Meet cần parser, contract transcript, cơ chế cấp quyền và kiểm thử adapter riêng trước khi được công bố là tích hợp.
+
+\section{Mô hình dữ liệu backend và tính nhất quán}
+\subsection{Persistence do ứng dụng sở hữu}
+Mô hình dữ liệu gồm \texttt{Meeting}, \texttt{TranscriptSegment}, \texttt{AnalysisRun}, \texttt{AnalysisUnit}, \texttt{SentimentPrediction}, \texttt{MeetingSentimentWindow}, \texttt{IncomingWebhook} và \texttt{OutboxEvent}. Cách tách thực thể này cho phép một transcript gốc được giữ độc lập với các unit đã chuẩn hóa và prediction do nhiều model version tạo ra. Evidence không phải text sao chép vào dashboard mà là liên kết có thể truy ngược từ aggregate đến unit, segment và revision nguồn.
+
+Segment được upsert theo \texttt{(meeting\_id, vexa\_segment\_id)}. Khi text, speaker hoặc timestamp đổi, backend tăng revision của segment và \texttt{transcript\_revision} của meeting. Analysis run được khóa duy nhất theo \texttt{(meeting\_id, kind, source\_revision, model\_version)}. Các ràng buộc này giúp retry API/worker không tạo nhiều run tương đương và cho phép phân tích lại khi transcript hoặc model thay đổi. Kết quả cũ được supersede bằng \texttt{is\_current=false}, thay vì bị xóa, để bảo toàn provenance \cite{buneman2001}.
+
+\subsection{Outbox, queue và khôi phục}
+Outbox event được ghi trong cùng domain dữ liệu PostgreSQL với segment hoặc kết quả phân tích. Event gồm loại event, meeting, payload và dedupe key duy nhất. Khi tạo final analysis run, backend commit run trước rồi enqueue định danh run vào Valkey Stream; nếu enqueue lỗi, run vẫn tồn tại ở trạng thái \texttt{queued}. Worker có cơ chế quét run queued để khôi phục khi Valkey tạm thời không sẵn sàng.
+
+Worker xử lý message qua consumer group, chỉ acknowledge message sau khi xử lý/commit thành công. Khi lỗi, transaction được rollback, \texttt{analysis\_run} được đánh dấu failed với error code và message không được acknowledge. Cơ chế này hỗ trợ retry có kiểm soát, nhưng không phải cam kết exactly-once end-to-end; retry vẫn đòi hỏi các unique constraint và idempotency key ở persistence.
+
+\section{Giao tiếp bất đồng bộ và delivery cho dashboard}
+Backend thực hiện hai kiểu giao tiếp. Kiểu request--response phục vụ các thao tác tạo, xem, đồng bộ, dừng meeting và đọc analytics. Kiểu event-driven phục vụ lifecycle transcript/analysis và delivery cập nhật. Worker tạo \texttt{analysis.sentiment.updated} sau khi aggregate được lưu; endpoint \texttt{/v1/meetings/\{meeting\_id\}/events} đọc các outbox event theo meeting và phát định dạng \texttt{text/event-stream} kèm keepalive.
+
+SSE là cơ chế server-to-client trên HTTP cho luồng event một chiều \cite{sse2015}. Trong MVP, SSE endpoint poll outbox mỗi giây và giữ tập event ID đã gửi trong vòng đời kết nối để tránh phát lặp trên cùng connection. Dashboard dùng event như tín hiệu refresh dữ liệu analytics; các giá trị KPI, timeline và evidence vẫn được đọc qua API. Điều này tránh để event payload trở thành nguồn dữ liệu độc lập nhưng đồng nghĩa với việc reconnect/replay, retention outbox và số lượng kết nối cần được thiết kế lại nếu triển khai quy mô lớn.
+
+\section{Bảo mật tại các boundary}
+\subsection{Xác thực webhook và API key}
+Webhook từ Vexa được xác minh bằng HMAC-SHA256 trên chuỗi \texttt{timestamp.raw\_body}; timestamp quá năm phút hoặc chữ ký không hợp lệ bị từ chối. HMAC là cơ chế xác thực thông điệp dựa trên hàm hash và secret dùng chung \cite{krawczyk1997}. Event ID được lưu trong \texttt{incoming\_webhooks}; nếu vi phạm khóa duy nhất, backend trả trạng thái duplicate thay vì chạy lại lifecycle meeting.
+
+Vexa API key chỉ tồn tại trong cấu hình backend và được gửi server-to-server. Dashboard không nhận key, không gọi endpoint transcript của Vexa và không truy cập PostgreSQL/Valkey. Production cần dùng secret manager hoặc file quyền hạn chế, TLS reverse proxy, rotation secret và logging đã redaction; các cơ chế này là yêu cầu vận hành, chưa phải bằng chứng tuân thủ bảo mật của MVP.
+
+\subsection{Identity ứng dụng và kiểm soát truy cập}
+Trong development, header \texttt{X-App-User-Id} tạo identity tạm và chỉ khi \texttt{APP\_ENV=development} mới có fallback \texttt{local-dev}. Đây không phải authentication production. Trước khi public service cần thay bằng session hoặc JWT/OAuth được xác minh, xác lập workspace/role, kiểm tra tenant isolation, rate limit và chính sách audit. Việc tách owner check trong service layer giúp thay cơ chế identity mà không phải sửa mọi endpoint, nhưng không thay thế một thiết kế authorization đầy đủ.
+
+\section{Khả năng vận hành và hướng tích hợp mở rộng}
+Endpoint \texttt{/health} kiểm tra process sống, còn \texttt{/ready} chỉ trả ready khi PostgreSQL và Valkey đều phản hồi. Startup áp dụng compatibility upgrade và tạo schema; poller chạy nền reconcile các meeting đang active theo interval cấu hình. Với Vexa, webhook là đường notification, còn REST reconcile là fallback để giảm nguy cơ mất transcript khi event đến muộn hoặc delivery thất bại.
+
+Kiến trúc hiện tại phù hợp cho MVP local, nơi FastAPI, worker, PostgreSQL, Valkey và dashboard chạy theo Docker Compose. Khi vận hành production, các thay đổi hợp lý gồm tách API/worker autoscaling, reverse proxy TLS, authentication thật, connection/pool tuning, queue monitoring, backup/restore, retention/delete workflow, alerting và load test. Các lựa chọn như nhiều microservice, direct Vexa WebSocket ingestion, distributed tracing, dynamic batching, ONNX, MLflow registry hoặc Kubernetes chỉ được triển khai sau khi có yêu cầu và benchmark tương ứng. Chúng không phải bằng chứng của MVP hiện tại.

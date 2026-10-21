@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071517" />
+    <title>ESP32 AI Meeting Agent</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand"><span>⌁</span><div><strong>ESP32 AI Meeting Agent</strong><small>Four physical-device simulation</small></div></div>
+        <div id="connection" class="connection">Checking backend…</div>
+      </header>
+      <div class="notice">No ESP32 processes audio or accesses GPT. All inference, TTS, features, and storage stay on the Ubuntu backend.</div>
+
+      <section class="summary">
+        <div><span id="online-count">0</span><small>online devices</small></div>
+        <div><span>4</span><small>fixed identities</small></div>
+        <div><span>MQTT</span><small>ordered coordination</small></div>
+        <div><span>AI bots</span><small>explicit Jitsi labels</small></div>
+      </section>
+
+      <section class="device-section">
+        <div class="heading"><div><p>DEVICE FLEET</p><h1>Validate the four-board model first.</h1></div><button id="refresh">Refresh status</button></div>
+        <div id="devices" class="devices"></div>
+      </section>
+
+      <section class="grid">
+        <form id="start-form" class="panel experiment">
+          <p>EXPERIMENT CONTROL</p><h2>Start an autonomous, bounded discussion.</h2>
+          <label>Research topic<textarea id="topic" rows="5">How can a meeting assistant support inclusion without monitoring people?</textarea></label>
+          <label>Rounds <select id="rounds"><option value="1">1 round · 4 turns</option><option value="2">2 rounds · 8 turns</option><option value="3">3 rounds · 12 turns</option></select></label>
+          <button class="primary" type="submit">Start when all four are online</button>
+          <small id="start-error"></small>
+        </form>
+        <aside class="panel protocol">
+          <p>TURN CONTRACT</p>
+          <ol><li>Coordinator grants one tokenized turn.</li><li>That ESP32 requests GPT from backend.</li><li>Backend returns text; device relays it.</li><li>Coordinator verifies token, persists audio, then advances.</li></ol>
+          <small>Duplicate, mismatched, stale, or out-of-order messages are rejected.</small>
+        </aside>
+      </section>
+
+      <section class="session-section">
+        <div class="heading"><div><p>CONVERSATION HISTORY</p><h2 id="session-title">No active experiment</h2></div><button id="stop" class="danger" disabled>Stop experiment</button></div>
+        <div id="turns" class="turns empty">Start a session after the four simulated devices register.</div>
+      </section>
+
+      <section class="panel boundary"><p>MEETING ADAPTER BOUNDARY</p><strong>Interface ready; live Jitsi participation is intentionally not claimed.</strong><span>The IFrame API does not expose raw tracks. Implement a media-capable adapter with consent controls before joining a real meeting.</span></section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
+

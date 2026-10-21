@@ -13,6 +13,7 @@ def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
     """Build bounded same-speaker units from finalized transcript rows."""
     units: list[UnitDraft] = []
     current: list[tuple[TranscriptSegment, str, str]] = []
+    last_accepted: dict[str, tuple[str, float]] = {}
 
     def flush() -> None:
         if not current:
@@ -61,6 +62,14 @@ def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
                 )
             )
             continue
+        speaker_identity = (segment.speaker_name or segment.speaker_key or "").strip().casefold()
+        previous = last_accepted.get(speaker_identity)
+        if previous and previous[0] == decision.normalized_text.casefold() and segment.start_seconds - previous[1] <= 3:
+            # The provider occasionally emits the same finalized phrase twice a
+            # few milliseconds apart. Keep the source transcript intact, but do
+            # not let a duplicate distort the sentiment aggregate.
+            continue
+        last_accepted[speaker_identity] = (decision.normalized_text.casefold(), segment.start_seconds)
         same_speaker = bool(current) and current[0][0].speaker_key == segment.speaker_key
         within_window = bool(current) and segment.end_seconds - current[0][0].start_seconds <= 45
         if current and (not same_speaker or not within_window or len(current) >= 3):

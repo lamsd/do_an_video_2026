@@ -7,9 +7,12 @@ settings.env
 # Local environments, caches, and editor/agent state
 .venv/
 venv/
+.python/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ipynb_checkpoints/
+*.orig
 .ruff_cache/
 node_modules/
 .agents/
@@ -43,3 +46,14 @@ node_modules/
 
 # Redundant compressed archive; source files are retained separately
 Reports/New folder.rar
+
+# Approved ML corpora and serialized models stay local. Their version, source,
+# hash and evaluation result belong in a redacted manifest, never in Git.
+/source/model-data/approved/
+/source/model-data/work/
+/source/model-artifacts/*
+!/source/model-artifacts/.gitkeep
+
+# Derived legacy research corpora contain raw text and remain local. They are
+# intentionally separate from approved meeting-sentiment data.
+/Reports/New_folder/tram_cam/derived/

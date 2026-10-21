@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -116,12 +116,37 @@ async def ready():
 
 @app.post("/v1/meetings", response_model=MeetingResponse, status_code=201)
 async def start_meeting(
-    body: StartMeetingRequest, db: AsyncSession = Depends(session), user: str = Depends(owner)
+    body: StartMeetingRequest,
+    response: Response,
+    db: AsyncSession = Depends(session),
+    user: str = Depends(owner),
 ):
     try:
         parsed = parse_google_meet_url(body.meeting_url)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+    existing = await db.scalar(
+        select(Meeting)
+        .where(
+            Meeting.owner_id == user,
+            Meeting.platform == parsed.platform,
+            Meeting.native_meeting_id == parsed.native_meeting_id,
+            Meeting.status.in_({"requested", "joining", "awaiting_admission", "active"}),
+        )
+        .order_by(Meeting.created_at.desc())
+    )
+    if existing is not None:
+        # Creating a bot twice for the same Meet is a conflict in Vexa. Return
+        # the application-owned meeting so retries are safe for callers.
+        response.status_code = 200
+        return meeting_response(existing)
+
+    try:
         spawned = await client().start_bot(parsed, body.bot_name)
-    except (ValueError, VexaError) as exc:
+    except VexaError as exc:
+        if exc.status_code == 409:
+            raise HTTPException(409, "An active bot already exists for this Google Meet") from exc
         raise HTTPException(502, str(exc)) from exc
     row = Meeting(
         owner_id=user,

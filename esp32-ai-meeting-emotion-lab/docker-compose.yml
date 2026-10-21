@@ -1,0 +1,87 @@
+services:
+  broker:
+    build:
+      context: .
+      dockerfile: docker/mosquitto/Dockerfile
+    environment:
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:?set MQTT_BACKEND_PASSWORD in .env}
+      MQTT_EMPATHY_PASSWORD: ${MQTT_EMPATHY_PASSWORD:?set MQTT_EMPATHY_PASSWORD in .env}
+      MQTT_CRITICAL_PASSWORD: ${MQTT_CRITICAL_PASSWORD:?set MQTT_CRITICAL_PASSWORD in .env}
+      MQTT_OPTIMISTIC_PASSWORD: ${MQTT_OPTIMISTIC_PASSWORD:?set MQTT_OPTIMISTIC_PASSWORD in .env}
+      MQTT_MODERATOR_PASSWORD: ${MQTT_MODERATOR_PASSWORD:?set MQTT_MODERATOR_PASSWORD in .env}
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -u backend -P \"$$MQTT_BACKEND_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 2 >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: meeting_agent
+      POSTGRES_USER: meeting_agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - meeting-agent-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meeting_agent -d meeting_agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://meeting_agent:meeting_agent@db:5432/meeting_agent}
+      MQTT_HOST: ${MQTT_HOST:-broker}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:?set MQTT_BACKEND_PASSWORD in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
+      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
+      MEDIA_ROOT: /app/data/media
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      HEARTBEAT_TTL_SECONDS: ${HEARTBEAT_TTL_SECONDS:-15}
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data/media:/app/data/media
+    depends_on:
+      broker:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+
+  simulator:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "simulator.run"]
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-broker}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_EMPATHY_PASSWORD: ${MQTT_EMPATHY_PASSWORD:?set MQTT_EMPATHY_PASSWORD in .env}
+      MQTT_CRITICAL_PASSWORD: ${MQTT_CRITICAL_PASSWORD:?set MQTT_CRITICAL_PASSWORD in .env}
+      MQTT_OPTIMISTIC_PASSWORD: ${MQTT_OPTIMISTIC_PASSWORD:?set MQTT_OPTIMISTIC_PASSWORD in .env}
+      MQTT_MODERATOR_PASSWORD: ${MQTT_MODERATOR_PASSWORD:?set MQTT_MODERATOR_PASSWORD in .env}
+    depends_on:
+      broker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  meeting-agent-postgres:
+

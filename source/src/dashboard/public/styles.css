@@ -6,8 +6,9 @@ input, button { border: 1px solid #475569; border-radius: .4rem; padding: .65rem
 button { cursor: pointer; background: #2563eb; border-color: #2563eb; } button:hover { background: #1d4ed8; }
 .active-meeting { color: #93c5fd; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; overflow-wrap: anywhere; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem; margin: 1.5rem 0; }
-.card, .evidence-item, .transcript-item { background: #172033; border: 1px solid #334155; border-radius: .5rem; padding: 1rem; }
+.card, .speaker-card, .evidence-item, .transcript-item { background: #172033; border: 1px solid #334155; border-radius: .5rem; padding: 1rem; }
 .card span { color: #94a3b8; display: block; font-size: .8rem; }.card strong { font-size: 1.15rem; }
+.speaker-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; margin: .75rem 0 1.5rem; }.speaker-card h3 { margin: 0 0 .5rem; }.speaker-card p { margin: .4rem 0; color: #cbd5e1; }
 .timeline { height: 150px; display: flex; gap: .5rem; align-items: center; border-bottom: 1px solid #64748b; padding: 1rem 0; }
 .point { width: 20px; min-height: 14px; border: 0; padding: 0; align-self: center; }.point.positive { background: #22c55e; }.point.negative { background: #ef4444; }.point.neutral { background: #94a3b8; }
 #evidence, #transcript { display: grid; gap: .75rem; }.evidence-meta { font-weight: 600; }.evidence-item p, .transcript-item p { white-space: pre-wrap; }

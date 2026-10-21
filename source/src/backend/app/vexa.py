@@ -9,7 +9,9 @@ MEET_CODE = re.compile(
 
 
 class VexaError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,8 @@ class VexaClient:
             )
         if response.is_error:
             raise VexaError(
-                f"Vexa {method} {path} returned {response.status_code}: {response.text[:300]}"
+                f"Vexa {method} {path} returned {response.status_code}: {response.text[:300]}",
+                status_code=response.status_code,
             )
         return response.json()
 

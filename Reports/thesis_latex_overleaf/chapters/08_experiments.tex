@@ -1,44 +1,115 @@
-\chapter{Kết Quả Kiểm Chứng Ứng Dụng và Giới Hạn Thực Nghiệm}
+\chapter{Kiểm Chứng Ứng Dụng và Thiết Kế Thực Nghiệm}
 \label{chap:experiments}
 
-\section{Phân biệt bằng chứng và kế hoạch đánh giá}
-Chương này chỉ báo cáo bằng chứng đã chạy trên ứng dụng MVP. Một số notebook model và dataset đã tồn tại trong dự án, nhưng chúng thuộc bài toán phân loại trầm cảm nhị phân trên văn bản ngoài domain họp và không tạo ra model serving cho ứng dụng. Chúng không thỏa protocol đánh giá sentiment ba lớp theo meeting nên không được dùng làm kết quả thực nghiệm. Chưa có benchmark sentiment phù hợp, ASR WER/CER, load test, độ trễ percentile hay UX; vì vậy không công bố F1, AUC, recall hoặc SLA chưa được đo.
+Chương này phân biệt hai loại bằng chứng có ý nghĩa khác nhau. \emph{Kiểm chứng ứng dụng} trả lời liệu các thành phần hệ thống có hoạt động cùng nhau theo hợp đồng đã thiết kế hay không. \emph{Đánh giá thực nghiệm} trả lời chất lượng của ASR, model sentiment, độ trễ, khả năng chịu tải hoặc trải nghiệm người dùng. MVP có test code và script phục vụ kiểm chứng integration; chưa có corpus transcript họp được gán nhãn, benchmark model, WER/CER, load test hoặc user study. Vì vậy, chương không công bố F1, AUC, accuracy, SLA hay kết luận về sức khỏe tâm thần.
 
-\section{Mẫu ghi nhận kết quả kiểm chứng ứng dụng}
-\begin{table}[H]\centering
-\caption{Mẫu bằng chứng integration MVP (chưa điền giá trị thực nghiệm)}
-\label{tab:mvp-results-template}
-\begin{tabularx}{\linewidth}{lX}
-\toprule Hạng mục & Kết quả\\ \midrule
-Ngày và môi trường chạy & \hspace{6cm}\\
-Transcript persistence & \hspace{6cm}\\
-Final analysis run & \hspace{6cm}\\
-Analysis unit & \hspace{6cm}\\
-Unit accepted và coverage & \hspace{6cm}\\
-Runtime model/version & \hspace{6cm}\\
-Dashboard (KPI, timeline, evidence, SSE) & \hspace{6cm}\\
-\bottomrule
-\end{tabularx}\end{table}
+\section{Câu hỏi kiểm chứng và nguyên tắc báo cáo}
+Kiểm chứng hệ thống tập trung vào bốn câu hỏi: (i) transcript có được nhận, lưu và version đúng không; (ii) quality gate/unit builder/adapter có tạo output theo hợp đồng không; (iii) analysis run có đi qua queue--worker--persistence--aggregate không; và (iv) dashboard có nhận được dữ liệu/evidence cập nhật không. Các câu hỏi này phù hợp với đóng góp artefact của khóa luận nhưng không thay thế evaluation một bộ phân loại học máy.
 
-Các ô trong Bảng~\ref{tab:mvp-results-template} được chủ động để trống. Chỉ điền sau khi có log chạy, phiên bản source/model và evidence tương ứng. Khi được điền, bảng chỉ chứng minh ingest, quality gate, lifecycle, persistence, cơ chế adapter và delivery realtime của pipeline; nó không thay thế đánh giá chất lượng sentiment, ASR hay sàng lọc trầm cảm.
+Mỗi lần chạy cần lưu một evidence bundle tối thiểu: commit hoặc image digest; file cấu hình đã redaction; thời điểm chạy; phiên bản container; command/script; exit code; log không chứa transcript thật/secret; application meeting UUID (nếu có); và bản ghi analytics/evidence liên quan. Kết quả ``pass'' chỉ được ghi khi có artifact tương ứng. Một script tồn tại trong repository không được xem là test đã chạy.
 
-\section{Mẫu so sánh nhiều model}
-\begin{table}[H]\centering
-\caption{Mẫu kết quả so sánh model sentiment (chưa điền giá trị thực nghiệm)}
-\label{tab:model-comparison-template}
-\begin{tabularx}{\linewidth}{lXXXX}
+\begin{table}[H]
+\centering
+\caption{Ma trận kiểm chứng và trạng thái bằng chứng của MVP}
+\label{tab:verification-matrix}
+\begin{tabularx}{\linewidth}{p{0.19\linewidth}p{0.28\linewidth}XX}
 \toprule
-Model & Dataset/version & Macro-F1 & Coverage & P95 inference\\ \midrule
-TF--IDF + Logistic Regression & & & & \\
-PhoBERT-base & & & & \\
-PhoBERT-large & & & & \\
-Model khác (nếu có) & & & & \\
+Nhóm & Artefact/test hiện có & Tiêu chí pass & Phạm vi tuyên bố \\ \midrule
+Unit quality/unit builder & \texttt{test\_quality.py}, \texttt{test\_units.py} & Chuẩn hóa tiếng Việt; reject hallucination; ghép unit; bỏ duplicate gần nhau & Logic tiền xử lý, không đo chất lượng ASR/model \\
+Unit service/Vexa parser & \texttt{test\_service.py}, \texttt{test\_vexa.py} & Fallback speaker có kiểm soát; URL Google Meet lỗi bị từ chối; upstream status được giữ & Hợp đồng helper, không chứng minh Vexa E2E \\
+Integration pipeline & \texttt{smoke-analysis-pipeline.sh} & Fixture $\rightarrow$ API $\rightarrow$ queue $\rightarrow$ worker $\rightarrow$ analytics thành công & Luồng nội bộ với dữ liệu tổng hợp \\
+Runtime reachability & \texttt{verify.sh}, \texttt{runtime-status.sh} & Compose hoạt động; \texttt{/ready} và dashboard phản hồi & Readiness/reachability, không phải load test \\
+Vexa/webhook E2E & Kịch bản vận hành được mô tả & Bot, transcript, HMAC, replay và finalize được kiểm tra có log & Cần chạy thực tế với consent; chưa có số liệu báo cáo \\
+Model/ASR/UX/performance & Chưa có dataset/protocol/run hoàn chỉnh & Xem các mục sau của chương & Chưa có kết quả thực nghiệm \\
 \bottomrule
-\end{tabularx}\end{table}
-Mỗi dòng phải dùng cùng protocol split, cùng tập test đã khóa và cùng quality gate. Ngoài các cột trong bảng, báo cáo hoàn chỉnh cần có precision/recall/F1 theo lớp, confusion matrix, calibration, hardware, batch size, seed và error analysis.
+\end{tabularx}
+\end{table}
 
-\section{Định hướng thực nghiệm và tối ưu hóa}
-Khi cần đánh giá hoặc cải thiện model, phải công bố dataset manifest, số meeting train/validation/test, phân bố lớp, agreement, macro-F1, metric theo lớp, confusion matrix, calibration, coverage và inference P50/P95. Đối với ASR, cần audio ground truth và WER/CER theo tiếng Việt, noise, echo, song và code-switching. Đối với hệ thống, cần đo $T_{capture}$, $T_{analysis}$, $T_{e2e}$, throughput, queue lag, error rate và resource profile. Đối với UX, cần protocol, số participant, task, metric và limitations. Đây là protocol lý thuyết, chưa phải một experiment thành công của khóa luận.
+\section{Kiểm thử mức đơn vị và hợp đồng}
+Ở lần kiểm chứng cục bộ ngày 28/09/2026, lệnh \texttt{uv run pytest -q} hoàn tất 11/11 test case. Nhóm quality kiểm tra NFC/whitespace vẫn giữ dấu tiếng Việt, mẫu hallucination kiểu ``subscribe'' bị từ chối và dấu hiệu tiếng Việt có thể ưu tiên hơn language label upstream sai. Nhóm unit builder kiểm tra ghép ba final segment liền kề của cùng speaker, giữ segment bị từ chối như evidence không inferable và bỏ duplicate final segment phát gần nhau. Nhóm service kiểm tra chỉ dùng fallback speaker khi provider chưa gán speaker; nhóm Vexa parser kiểm tra URL Markdown không hợp lệ và bảo toàn status code lỗi upstream.
 
-\section{Phân tích hạn chế}
-Không có coverage, accuracy hay F1 nào được điền ở giai đoạn hiện tại. Rule baseline chỉ hữu ích để kiểm tra integration; nó không thay thế model đã huấn luyện. Kết quả accuracy cao từ một notebook phân loại trầm cảm nhị phân cũng không được ngoại suy sang sentiment transcript họp, do khác task và nguy cơ leakage từ random split. Các transcript ngắn, bị sửa, multilingual hoặc không đủ điều kiện phải tiếp tục được biểu diễn là unknown hoặc excluded cùng lý do, thay vì suy luận quá mức.
+Các test này nên chạy trong môi trường backend khóa dependency, ví dụ \texttt{uv run pytest}, và log kết quả phải được lưu vào evidence bundle. Chúng kiểm tra invariant của code; không dùng transcript thật, không gọi Vexa và không cho biết một model nhận nhãn sentiment đúng bao nhiêu lần. Khi thêm model adapter, test contract cần bổ sung input tiếng Việt/ngoài ngôn ngữ, shape của probability, label mapping, failure mode khi artifact không tải được và tính nhất quán giữa \texttt{model\_version} cấu hình với version thực tế.
+
+\section{Kiểm chứng integration và vận hành}
+\subsection{Smoke pipeline tổng hợp}
+Script \texttt{smoke-analysis-pipeline.sh} tạo một meeting fixture với hai final segment tiếng Việt tổng hợp: một chứa marker tích cực và một chứa marker tiêu cực. Script tạo final analysis run qua API, chờ worker hoàn tất, đọc overview và units, rồi kiểm tra status \texttt{succeeded}, coverage bằng $1$, có đúng hai unit và tập nhãn \{\textit{positive}, \textit{negative}\}. Tất cả row phụ thuộc được xóa qua khóa UUID fixture khi script kết thúc, kể cả khi lỗi.
+
+Smoke test này là kiểm chứng tốt cho đường đi application-owned API--PostgreSQL--Valkey Stream--worker--analytics API và cho runtime \texttt{baseline-rules-v2}. Tuy nhiên, fixture được chọn để khớp luật baseline, nên kết quả không được dùng làm accuracy/F1, không đại diện cho ngôn ngữ họp và không chứng minh PhoBERT hoặc custom model. Script cũng không thay thế test SSE browser, benchmark đồng thời, resilience khi process chết hoặc Vexa transcript thực.
+
+\subsection{Readiness, dashboard và contract nguồn}
+\texttt{verify.sh} kiểm tra trạng thái Compose, endpoint \texttt{/ready} của backend và HTML dashboard trên loopback. \texttt{runtime-status.sh} tạo audit read-only về container/port/readiness nhưng không in \texttt{settings.env}, transcript hay biến môi trường container. Các script này nên chạy trước demo và sau thay đổi hạ tầng; output pass chỉ chứng minh service reachable tại thời điểm chạy.
+
+Kịch bản contract Vexa cần kiểm tra độc lập: spawn bot đúng meeting/owner, đọc transcript, stop bot, webhook có chữ ký hợp lệ, webhook chữ ký sai, timestamp hết hạn, event ID trùng, retry reconcile và finalize. Mỗi trường hợp phải nêu input, response HTTP kỳ vọng, row database/event dự kiến và cách cleanup. Không dùng transcript cuộc họp thật trong Git, fixture hay CI log; E2E thật chỉ được thực hiện sau khi participant consent và endpoint HTTPS của webhook đã sẵn sàng.
+
+\section{Protocol đánh giá model sentiment}
+\subsection{Dữ liệu, nhãn và split}
+Để đánh giá một model sentiment, cần corpus transcript họp đúng task với guideline ba lớp, trường hợp \textit{unknown} và quy tắc cho phủ định, mỉa mai, code-switching, thiếu ngữ cảnh và trích dẫn lời người khác. Ít nhất hai annotator độc lập nên gán nhãn trước adjudication; agreement cần được báo cáo bằng Cohen's kappa hoặc Krippendorff's alpha cùng phân bố nhãn. Agreement không thay thế chất lượng model, nhưng là bằng chứng về độ tin cậy của nhãn tham chiếu \cite{artstein2008}.
+
+Train/validation/test phải split theo \textbf{meeting}, không split ngẫu nhiên theo segment, để tránh speaker/topic/context leakage. Test set được khóa trước tuning. Dataset manifest ghi nguồn, consent/license, số meeting/speaker/unit, tiêu chí quality gate, date range, hash, preprocessing, label guideline và lý do loại dữ liệu. Không đưa dữ liệu ngoài domain hoặc notebook phân loại trầm cảm nhị phân vào cùng bảng kết quả với sentiment transcript.
+
+\subsection{Metric, uncertainty và so sánh model}
+Với lớp $c$, precision, recall và F1 được xác định:
+\begin{equation}
+P_c=\frac{TP_c}{TP_c+FP_c},\qquad R_c=\frac{TP_c}{TP_c+FN_c},\qquad F1_c=\frac{2P_cR_c}{P_c+R_c}.
+\end{equation}
+Macro-F1 là trung bình không trọng số của $F1_c$ trên các lớp sentiment, vì vậy không để lớp neutral chiếm đa số che khuất lỗi ở positive/negative. Báo cáo đầy đủ gồm confusion matrix, precision/recall/F1 theo lớp, coverage, tỷ lệ \textit{unknown}, calibration, latency P50/P95, phần cứng, batch size, seed và error analysis theo các lát dữ liệu đã định trước.
+
+Khi so sánh model, dùng cùng test set, quality gate, language routing, preprocessing policy và hardware. Confidence interval có thể được ước lượng bằng bootstrap với đơn vị resample là meeting, không phải segment, để tôn trọng cấu trúc phụ thuộc của dữ liệu \cite{efron1979}. Nếu tuyên bố model A tốt hơn B, cần nêu giả thuyết, phép kiểm định/interval, đơn vị phân tích và số lần thử; kiểm định ý nghĩa trong NLP phải phù hợp metric và thiết kế thực nghiệm \cite{dror2018}.
+
+\begin{table}[H]
+\centering
+\caption{Mẫu báo cáo so sánh model sentiment (chỉ điền sau run có thể tái lập)}
+\label{tab:model-comparison-template}
+\begin{tabularx}{\linewidth}{p{0.23\linewidth}p{0.22\linewidth}XXX}
+\toprule
+Model/artifact & Dataset/test version & Macro-F1 [CI] & Coverage & P95 inference \\ \midrule
+TF--IDF + Logistic Regression & & & & \\
+PhoBERT-base fine-tune & & & & \\
+PhoBERT-large fine-tune & & & & \\
+Custom model (nếu có) & & & & \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Đánh giá ASR, hệ thống và trải nghiệm người dùng}
+\subsection{ASR và transcript}
+WER/CER cần audio gốc và transcript reference được chuẩn bị độc lập. Báo cáo phải cố định quy tắc tokenization tiếng Việt, điều kiện audio, loại meeting, noise/echo, speech overlap, code-switching và cách xử lý tên riêng. WER/CER là metric của ASR, không thể dùng thay F1 sentiment; ngược lại, F1 sentiment không cho biết transcript đã được nhận dạng chính xác bao nhiêu. MVP chưa có bộ dữ liệu này nên không báo cáo WER/CER.
+
+\subsection{Hiệu năng và resilience hệ thống}
+Khi đo hệ thống, cần ghi workload generator, số meeting/segment, phân bố kích thước text, concurrency, thời gian chạy, phần cứng/container image và cách warm-up. Độ trễ được tách:
+\begin{equation}
+T_{e2e}=T_{capture}+T_{ingest}+T_{queue}+T_{analysis}+T_{delivery}.
+\end{equation}
+Metric tối thiểu gồm throughput, queue lag, success/failure/retry rate, P50/P95/P99 latency, resource profile và thời gian recovery sau khi restart backend/worker. Fault injection cần bao gồm Valkey unavailable, backend/worker restart, webhook duplicate/tampered/replay và transcript revision muộn. Không ghi SLA hay ``real time'' định lượng nếu chưa có workload và log đo tương ứng.
+
+\subsection{UX và cách diễn giải}
+UX study nên kiểm tra người dùng có tìm được evidence, nhận ra \textit{unknown}/coverage thấp, phân biệt polarity transcript với đánh giá con người và hiểu model/revision hay không. Nhiệm vụ, participant criteria, consent, prototype/version, task completion, SUS/NASA-TLX và limitation phải được công bố. Không thiết kế UX study để suy luận ai có trầm cảm hoặc yêu cầu participant đưa ra quyết định nhân sự từ dashboard.
+
+\section{Biên bản bằng chứng cho một lần kiểm chứng integration}
+Mục này không phải là bảng kết quả sentiment. Nó là ``biên bản truy xuất'' cho một lần chạy integration, nhằm trả lời câu hỏi: kết luận ``pipeline hoạt động'' dựa trên lần chạy nào, ở phiên bản mã nào và có thể kiểm tra lại bằng artifact nào. Một run integration chỉ chứng minh luồng nội bộ API--PostgreSQL--Valkey--worker--analytics hoạt động với input đã nêu; nó không chứng minh Accuracy, Macro-F1, WER ASR hoặc SLA.
+
+Mỗi run có một Evidence ID duy nhất, ví dụ \texttt{EVID-20260928-INT01}. Evidence bundle được lưu cục bộ trong \texttt{source/evidence/runs/<Evidence ID>/}; cấu trúc, cách redaction và script tạo bundle được mô tả trong \texttt{source/evidence/README.md}. Quy trình ghi nhận gồm bốn bước: (i) chạy script kiểm chứng; (ii) kiểm tra exit code và log; (iii) điền manifest bằng thông tin môi trường thực tế; và (iv) chỉ trích dẫn Evidence ID trong luận văn khi bundle có đầy đủ artifact. Nếu integration chưa chạy, phải ghi rõ ``chưa đo'' và không điền số liệu.
+
+\begin{table}[H]
+\centering
+\caption{Nội dung cần ghi trong evidence bundle của một run integration}
+\label{tab:mvp-results-template}
+\begin{tabularx}{\linewidth}{p{0.30\linewidth}p{0.33\linewidth}X}
+\toprule
+Trường evidence & Nội dung cần ghi & Nguồn trong bundle \\ \midrule
+Định danh run & Evidence ID, ngày/giờ ICT, người chạy, kết quả PASS/FAIL & \texttt{manifest.md} \\
+Phiên bản/môi trường & Git commit, OS, CPU/RAM, Docker/Compose, image digest nếu có & \texttt{environment.txt}, \texttt{manifest.md} \\
+Lệnh và kết quả & Command đầy đủ, exit code, stdout/stderr & \texttt{commands.txt}, \texttt{exit-code.txt}, \texttt{stdout.log} \\
+Dữ liệu và quyền riêng tư & Fixture ID đã redaction; synthetic hay real-consented; consent/retention áp dụng & \texttt{manifest.md} \\
+Vòng đời pipeline & Transcript revision, analysis run status, accepted/rejected unit và lý do & API result đã redaction hoặc \texttt{stdout.log} \\
+Coverage/version & Acceptance, prediction, effective coverage; \texttt{model\_version}, \texttt{preprocessing\_version} & Analytics API đã redaction, \texttt{manifest.md} \\
+Kiểm tra UI/SSE & KPI, timeline, evidence, event SSE hoặc lý do chưa kiểm tra & Screenshot/API result đã redaction \\
+Giới hạn/failure & Điều kiện bất thường, retry, điểm chưa đo và phạm vi claim được phép nêu & \texttt{manifest.md} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Ví dụ, Evidence ID của unit test chỉ được dùng để kết luận các invariant code đã pass; nó không thay thế Evidence ID integration. Sau khi có một bundle integration PASS, bảng kết quả ở phần sau hoặc phụ lục nên trích Evidence ID và tóm tắt số run/pass/fail, thay vì chép toàn bộ log vào luận văn.
+
+\section{Giới hạn thực nghiệm hiện tại}
+Rule baseline chỉ chứng minh integration khi smoke test pass; nó không thay thế model đã huấn luyện. Các notebook phân loại trầm cảm nhị phân ngoài domain họp không được ngoại suy sang sentiment transcript do khác task, nhãn, dữ liệu và nguy cơ leakage. Chưa có số liệu coverage, accuracy, F1, WER, latency percentile, load, calibration hoặc UX được báo cáo như kết quả của khóa luận. Các transcript ngắn, multilingual, bị sửa hoặc không đủ điều kiện tiếp tục được biểu diễn là \textit{unknown}/rejected cùng lý do, thay vì bị diễn giải quá mức.

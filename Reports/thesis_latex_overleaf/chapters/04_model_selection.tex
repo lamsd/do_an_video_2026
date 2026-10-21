@@ -1,27 +1,103 @@
-\chapter{Tích Hợp Mô Hình và Đánh Giá}
+\chapter{Thiết Kế, Tích Hợp và Vòng Đời Mô Hình}
 \label{chap:model}
 
+Chương này trình bày mô hình như một thành phần có vòng đời trong hệ thống, không chỉ là một checkpoint được gọi tại thời điểm suy luận. Trọng tâm gồm hợp đồng adapter, điều kiện lựa chọn model, thiết kế artifact, retraining và quản trị phiên bản. Các quy trình MLflow được trình bày như kiến trúc MLOps đề xuất; MVP hiện chưa cài đặt MLflow hoặc serving một model học máy đã huấn luyện.
+
 \section{Trạng thái mô hình trong MVP}
-MVP triển khai giao diện \texttt{SentimentClassifier} và một rule baseline có tính xác định, phiên bản \texttt{baseline-rules-v1}. Baseline này có mục đích kiểm tra data contract, quality gate, queue, persistence và dashboard; nó không phải là mô hình học máy, cũng không được dùng để suy ra chất lượng sentiment.
+MVP hiện triển khai giao diện \texttt{SentimentClassifier} và runtime \texttt{baseline-rules-v2}. Baseline là bộ luật có tính xác định, nhằm kiểm tra data contract, quality gate, queue, persistence, evidence và dashboard. Nó không phải mô hình học máy, confidence của nó không được calibration và không được dùng để kết luận về chất lượng sentiment.
 
-Thư mục dự án có các notebook và dữ liệu đã tồn tại từ quá trình thử nghiệm trước. Các notebook đó thực hiện phân loại trầm cảm nhị phân trên dữ liệu văn bản ngoài domain họp, với cách chia dữ liệu ngẫu nhiên. Vì task, nhãn, nguồn dữ liệu và protocol khác với sentiment ba lớp từ transcript họp, chúng không phải model artifact được serving và không được dùng làm kết quả cho khóa luận. Không thể chuyển trực tiếp một accuracy từ bài toán nhị phân này thành chất lượng cho dashboard sentiment.
+Worker khởi tạo baseline từ cấu hình \texttt{MODEL\_VERSION}; nếu cấu hình yêu cầu version khác nhưng adapter tương ứng không được cài đặt, worker dừng thay vì tự động rơi về baseline. Ràng buộc này tránh trường hợp dashboard ghi nhận một model version nhưng thực tế suy luận bằng model khác. Mỗi analysis run hiện lưu \texttt{source\_revision}, \texttt{model\_version} và \texttt{preprocessing\_version}; đây là nền tảng cần thiết để tích hợp một artifact học máy có kiểm soát.
 
-\section{Các lựa chọn tích hợp về mặt lý thuyết}
-Khi có model artifact phù hợp với task, adapter có thể được thay bằng các lựa chọn sau mà không thay đổi API hay schema persistence:
-\begin{itemize}
-  \item TF--IDF + Logistic Regression: baseline nhẹ, chạy CPU, dễ tái lập và dễ phân tích lỗi.
-  \item PhoBERT fine-tune: lựa chọn chính cho tiếng Việt khi tokenizer, word segmentation và checkpoint được dùng tương thích \cite{phobert2020}.
-  \item mBERT/XLM-R: comparator cho dữ liệu đa ngôn ngữ khi có benchmark thích hợp \cite{xlmr2020}.
-\end{itemize}
-ViHealthBERT chỉ có ý nghĩa khi task, model card và license phù hợp \cite{vihealthbert2022}; nó không được coi là mặc định cho transcript họp.
+Các notebook và dữ liệu tồn tại trong dự án trước đó thuộc bài toán phân loại trầm cảm nhị phân trên văn bản ngoài domain họp, với protocol chia dữ liệu khác. Chúng không phải model artifact được serving, không có bằng chứng phù hợp cho sentiment ba lớp và không được dùng làm kết quả thực nghiệm của khóa luận. Không thể chuyển trực tiếp accuracy của các notebook này thành chất lượng của dashboard sentiment.
 
-\section{Protocol lý thuyết khi huấn luyện lại}
-Ứng dụng hiện không yêu cầu người dùng gán nhãn trong quá trình vận hành. Tuy vậy, để tạo hoặc retrain model sentiment có thể claim chất lượng, cần một dataset đúng task với guideline cho từng lớp, phủ định, mỉa mai, code-switching và trường hợp thiếu ngữ cảnh. Tối thiểu hai annotator độc lập, adjudication và Cohen's kappa hoặc Krippendorff's alpha là protocol khuyến nghị. Dữ liệu phải split theo \textbf{meeting}, không split ngẫu nhiên theo segment, để tránh leakage speaker và ngữ cảnh. Test set được khóa trước tuning; threshold chọn trên validation.
+\section{Nguyên tắc thiết kế model cho hệ thống}
+\subsection{Hợp đồng adapter}
+Thiết kế tách lõi hệ thống khỏi thư viện học máy bằng giao diện \texttt{SentimentClassifier}. Adapter nhận danh sách analysis unit đã qua quality gate và trả về, cho mỗi unit, nhãn, confidence, phân bố lớp, polarity score, inference latency và version model. Nhờ đó, API, schema persistence, outbox và dashboard không phụ thuộc trực tiếp vào PyTorch, scikit-learn hoặc một checkpoint cụ thể.
 
-\section{Metric và tiêu chí báo cáo lý thuyết}
-Nếu thực hiện retraining, báo cáo cần gồm macro-F1, precision/recall/F1 theo lớp, confusion matrix, calibration, coverage, P50/P95 inference và phân bố lớp. Accuracy đơn lẻ không đủ khi lớp neutral mất cân bằng. Bootstrap confidence interval chỉ được công bố sau khi chạy thật, kèm số resample, seed và đơn vị resample. Khóa luận không điền F1, AUC hay SLA giả định.
+Một adapter được xem là tương thích khi thỏa bốn điều kiện: (i) chỉ nhận text và language được khai báo trong model card; (ii) trả về nhãn thuộc tập \textit{positive}, \textit{neutral}, \textit{negative}, \textit{unknown}; (iii) gắn mọi prediction với version bất biến của artifact và preprocessing; và (iv) trả lỗi tường minh khi artifact không tải được hoặc input ngoài phạm vi. Thiết kế này hạn chế nợ kỹ thuật do phụ thuộc dữ liệu, cấu hình và các ranh giới hệ thống bị xói mòn---những rủi ro phổ biến của hệ thống ML vận hành lâu dài \cite{sculley2015}.
 
-\section{Tối ưu hóa và retraining}
-Trước khi promote một model, cần lưu dataset manifest, commit/source version, preprocessing, checkpoint, hyperparameter, seed và environment. Các hướng tối ưu hóa gồm làm sạch transcript theo quality gate, gộp context cùng speaker có giới hạn, chọn threshold theo validation, class weighting, early stopping, tối ưu batch size/max length và calibration sau huấn luyện. Không tối ưu bằng cách dùng test set nhiều lần.
+\subsection{Các phương án model}
+Lựa chọn model phải dựa trên dữ liệu target, ngân sách độ trễ, khả năng tái lập và rủi ro vận hành, không chỉ dựa trên một metric đơn lẻ. Bảng~\ref{tab:model-options} tóm tắt các lựa chọn cần được đánh giá trên cùng protocol.
 
-Retraining chỉ được kích hoạt khi có dữ liệu mới hợp pháp, thay đổi domain hoặc bằng chứng drift; model mới chạy shadow mode, so sánh với runtime hiện tại trên holdout đã khóa, sau đó mới được đăng ký version và chuyển serving. Model cũ vẫn giữ version/evidence để audit và rollback. Các bước này là thiết kế định hướng, chưa được thực nghiệm trong khóa luận.
+\begin{table}[H]
+\centering
+\caption{Các phương án model cho sentiment transcript tiếng Việt}
+\label{tab:model-options}
+\begin{tabularx}{\linewidth}{p{0.25\linewidth}XXX}
+\toprule
+Phương án & Vai trò & Ưu điểm & Điều kiện trước khi serving \\ \midrule
+TF--IDF + Logistic Regression & Baseline học máy & Nhẹ, CPU-friendly, dễ phân tích lỗi & Corpus đúng task, vocabulary và preprocessing được version hóa \\
+PhoBERT fine-tune & Ứng viên chính cho tiếng Việt & Biểu diễn ngữ cảnh tiếng Việt tốt hơn mô hình bag-of-words & Tokenizer, word segmentation, checkpoint và max length tương thích \cite{phobert2020} \\
+mBERT/XLM-R & Comparator đa ngôn ngữ & Có thể khảo sát dữ liệu đa ngôn ngữ sau này & Benchmark riêng cho language routing và code-switching \cite{xlmr2020} \\
+Custom model theo miền & Ứng viên theo tổ chức/miền nghiệp vụ & Có thể phù hợp thuật ngữ và phong cách giao tiếp đặc thù & Dữ liệu hợp pháp, model card, đánh giá độc lập và quy trình phê duyệt \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+ViHealthBERT chỉ phù hợp khi task, license, model card và domain dữ liệu tương thích \cite{vihealthbert2022}; nó không phải lựa chọn mặc định cho transcript họp. PhoBERT hay bất kỳ custom model nào chỉ được gọi là tốt hơn baseline sau khi có benchmark tái lập trên tập test đã khóa.
+
+\section{Thiết kế dữ liệu và protocol huấn luyện lại}
+\subsection{Dataset và gán nhãn}
+Retraining đòi hỏi corpus sentiment đúng task, trong đó đơn vị gán nhãn phải nhất quán với analysis unit mà runtime sử dụng. Guideline cần định nghĩa ba lớp polarity, trường hợp thiếu ngữ cảnh, phủ định, mỉa mai, code-switching, trích dẫn lời người khác và segment không đủ điều kiện. Tối thiểu hai annotator độc lập, adjudication và chỉ số agreement như Cohen's kappa hoặc Krippendorff's alpha là protocol khuyến nghị.
+
+Tập dữ liệu phải được chia theo \textbf{meeting}, không chia ngẫu nhiên theo segment, để tránh leakage từ speaker, chủ đề hoặc ngữ cảnh của cùng một cuộc họp vào cả train và test. Test set được khóa trước khi tuning; threshold, prompt (nếu có) và hyperparameter chỉ được chọn trên validation. Dataset manifest cần ghi nguồn, consent/license, tiêu chí lọc, số meeting/speaker/unit, phân bố lớp, hash phiên bản, ngày tạo và giới hạn sử dụng. Cách ghi nhận này phù hợp với mục tiêu minh bạch của datasheets for datasets \cite{gebru2021}.
+
+\subsection{Thiết kế experiment và artifact}
+Mỗi experiment cần có một định danh có thể tái lập, tối thiểu gồm: commit mã nguồn, dataset manifest/hash, split, preprocessing version, tokenizer, checkpoint gốc, hyperparameter, seed, môi trường chạy và hardware. Artifact được promote không chỉ là file trọng số; nó cần bao gồm tokenizer, label mapping, threshold, model signature, dependency lockfile, evaluation report và model card. Model cards hỗ trợ ghi nhận mục đích, nhóm người dùng dự kiến, dữ liệu đánh giá, metric, giới hạn và các trường hợp không nên sử dụng model \cite{mitchell2019}.
+
+Không dùng transcript vận hành để huấn luyện mặc định. Việc trích xuất, gán nhãn hoặc fine-tune dữ liệu của một tổ chức chỉ được thực hiện khi có mục đích đã xác định, cơ sở pháp lý/consent, chính sách retention/delete và kiểm soát truy cập phù hợp. Custom model phải được quản trị tách biệt theo tổ chức hoặc workspace để tránh trộn dữ liệu và artifact giữa các miền không được phép.
+
+\section{Đánh giá, calibration và điều kiện promote}
+Một ứng viên model cần được so sánh với baseline trên cùng quality gate, language routing, test set và hardware. Báo cáo tối thiểu gồm macro-F1; precision, recall, F1 theo lớp; confusion matrix; coverage; phân bố nhãn; P50/P95 inference; và error analysis theo các lát dữ liệu đã xác định trước. Accuracy đơn lẻ không đủ khi lớp neutral chiếm ưu thế hoặc chi phí lỗi khác nhau giữa các lớp.
+
+Confidence chỉ có thể được diễn giải là xác suất đúng sau khi kiểm tra calibration trên dữ liệu độc lập. Nghiên cứu về calibration cho thấy các mạng nơ-ron hiện đại có thể over-confident \cite{guo2017}; vì vậy báo cáo phải tách score thô, phương pháp calibration (nếu có) và metric như Expected Calibration Error. Nếu không đạt tiêu chí định trước, model vẫn có thể được giữ ở trạng thái nghiên cứu nhưng không được promote vào serving.
+
+Điều kiện promote cần được xác định trước experiment, ví dụ: không giảm macro-F1 quá ngưỡng cho phép, không suy giảm nghiêm trọng một lớp, coverage và latency đáp ứng ngân sách, kiểm tra privacy/license đạt yêu cầu, và có evidence để rollback. Các ngưỡng số cụ thể chỉ được điền sau khi đội dự án xác định SLO và chạy đo thực tế; khóa luận không đặt số liệu giả định.
+
+\section{Retraining và giám sát sau triển khai}
+Retraining không nên kích hoạt chỉ vì có dữ liệu mới. Các tín hiệu có thể khởi tạo một vòng đánh giá gồm: thay đổi nguồn transcript hoặc language routing; thay đổi domain/thuật ngữ; tỷ lệ unit bị loại hoặc \textit{unknown} tăng; drift phân bố token/nhãn; lỗi được người dùng đánh dấu; hoặc benchmark định kỳ cho thấy model suy giảm. Một trigger chỉ tạo yêu cầu đánh giá, không tự động đưa model mới vào production.
+
+Vòng đời retraining đề xuất gồm: (1) phê duyệt phạm vi dữ liệu và cập nhật manifest; (2) tạo dataset version và meeting-level split; (3) chạy train/validation có tracking; (4) kiểm tra metric, calibration, latency và error analysis; (5) đăng ký artifact candidate; (6) shadow mode hoặc canary với logging có kiểm soát; (7) promote sau phê duyệt; và (8) giám sát/rollback. Shadow mode chạy candidate song song với champion nhưng không thay đầu ra dashboard; canary chỉ chuyển một phần traffic khi hệ thống đã có cơ chế định tuyến phù hợp. MVP hiện chưa hiện thực hai cơ chế này.
+
+\section{Kiến trúc MLflow đề xuất}
+MLflow cung cấp các khái niệm tracking experiment, lưu artifact và model registry cho vòng đời ML \cite{mlflow2018}. Theo tài liệu MLflow hiện hành, registry có thể quản lý version, tag và alias cho model; alias như \texttt{candidate} hoặc \texttt{champion} giúp tham chiếu phiên bản được chọn mà không dùng ``latest'' mơ hồ \cite{mlflowdocs2026}. Hình~\ref{fig:mlflow-lifecycle} mô tả cách tích hợp đề xuất; toàn bộ các nút nét đứt là kiến trúc tương lai, không phải service đang chạy trong Docker Compose của MVP.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=10mm and 12mm,
+  stage/.style={draw=gray, dashed, rounded corners=2pt, fill=gray!10, align=center, minimum width=32mm, minimum height=12mm},
+  runtime/.style={draw=primaryblue, rounded corners=2pt, fill=lightblue, align=center, minimum width=32mm, minimum height=12mm},
+  flow/.style={-{Stealth[length=2.2mm]}, thick, draw=gray, dashed},
+  live/.style={-{Stealth[length=2.2mm]}, thick, draw=primaryblue}
+]
+  \node[stage] (data) {Dataset manifest\\meeting-level split};
+  \node[stage, right=of data] (train) {Train + validation\\params, seed, metric};
+  \node[stage, right=of train] (tracking) {MLflow Tracking\\run + artifacts};
+  \node[stage, right=of tracking] (registry) {Model Registry\\version + tags/aliases};
+  \node[stage, below=of registry] (approval) {Validation, approval\\candidate/champion};
+  \node[runtime, left=of approval] (adapter) {Runtime adapter\\resolved immutable version};
+  \node[runtime, left=of adapter] (worker) {Sentiment worker\\prediction + evidence};
+  \node[stage, below=of worker] (monitor) {Monitoring + review\\drift / error / latency};
+
+  \draw[flow] (data) -- (train);
+  \draw[flow] (train) -- (tracking);
+  \draw[flow] (tracking) -- (registry);
+  \draw[flow] (registry) -- (approval);
+  \draw[flow] (approval) -- (adapter);
+  \draw[live] (adapter) -- (worker);
+  \draw[flow] (worker) -- (monitor);
+  \draw[flow] (monitor.west) -| (data.south);
+\end{tikzpicture}%
+}
+\caption{Kiến trúc MLOps/MLflow đề xuất. Nét đứt: thành phần chưa được triển khai trong MVP.}
+\label{fig:mlflow-lifecycle}
+\end{figure}
+
+Để hiện thực kiến trúc này, cần bổ sung ít nhất bốn thay đổi có chủ đích. Thứ nhất, môi trường training dùng MLflow Tracking để log param, metric, dataset manifest và artifact; backend store của registry phải dùng cơ sở dữ liệu bền vững, còn artifact store cần phân quyền và backup. Thứ hai, registry đăng ký một version bất biến kèm model signature, model card và báo cáo đánh giá; alias chỉ phục vụ chọn candidate/champion, không thay cho bằng chứng version. Thứ ba, worker cần thêm adapter tải artifact từ \texttt{MODEL\_URI} hoặc registry alias tại thời điểm khởi động, kiểm tra signature/preprocessing và lưu \emph{resolved version} vào \texttt{analysis\_run}. Thứ tư, cấu hình cần bổ sung URI MLflow, tên/alias model, timeout, credential và chính sách fail-closed; nếu registry hoặc artifact không sẵn sàng, worker không được âm thầm dùng baseline.
+
+Khi promote, alias \texttt{champion} có thể được chuyển sang version đã phê duyệt, nhưng deployment phải resolve alias thành version bất biến, ghi version đó vào evidence và chỉ đổi runtime theo rollout có kiểm tra sức khỏe. Rollback là thao tác đưa deployment về artifact đã biết, thay vì huấn luyện lại khẩn cấp. Cách quản trị này giảm sự phụ thuộc ngầm giữa dữ liệu, code, artifact và cấu hình, đồng thời giữ khả năng tái lập của mỗi prediction.
+
+\section{Giới hạn thực nghiệm và phạm vi tuyên bố}
+Khóa luận chưa có artifact PhoBERT/custom model được serving, dataset sentiment transcript được gán nhãn, benchmark đa model, calibration run, drift monitor, MLflow server, model registry, shadow mode hoặc canary deployment. Vì vậy, không công bố macro-F1, AUC, accuracy, latency percentile, SLO hay hiệu quả retraining. Các nội dung trong chương là thiết kế và protocol để triển khai/đánh giá tiếp theo; bằng chứng đã chạy được giới hạn ở integration của \texttt{baseline-rules-v2} trong pipeline.

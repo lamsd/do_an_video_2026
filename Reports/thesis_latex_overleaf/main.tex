@@ -26,6 +26,7 @@
 \usepackage{colortbl}
 \usepackage{hyperref}
 \usepackage{url}
+\usepackage{xurl}                % cho phép ngắt dòng URL/DOI dài trong bibliography
 \usepackage{enumitem}
 \usepackage{fancyhdr}
 \usepackage{titlesec}
@@ -66,7 +67,7 @@
 % LINE SPACING
 %----------------------------------------------------------------
 \setstretch{1.5}
-\usetikzlibrary{arrows.meta, fit, positioning, backgrounds, calc}
+\usetikzlibrary{arrows.meta, fit, positioning, backgrounds, calc, shapes.geometric}
 %----------------------------------------------------------------
 % COLORS
 %----------------------------------------------------------------
@@ -94,6 +95,7 @@
   pdfsubject={Khóa luận tốt nghiệp},
   pdfkeywords={PhoBERT, phân tích sentiment, transcript tiếng Việt, thời gian thực, quyền riêng tư}
 }
+\urlstyle{same}
 
 %----------------------------------------------------------------
 % CHAPTER / SECTION TITLE FORMAT
@@ -262,7 +264,7 @@
 
 \tableofcontents
 \listoftables
-% Chỉ bật danh sách hình khi luận văn có hình được đánh số.
+\listoffigures
 \input{chapters/00_acronyms}
 
 %----------------------------------------------------------------
@@ -285,6 +287,9 @@
 %----------------------------------------------------------------
 % BIBLIOGRAPHY
 %----------------------------------------------------------------
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
 \bibliographystyle{IEEEtran}
 \bibliography{config/references}
 

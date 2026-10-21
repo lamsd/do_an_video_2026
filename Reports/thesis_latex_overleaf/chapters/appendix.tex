@@ -1,143 +1,139 @@
 % chapters/appendix.tex
-\chapter{Giải Thích Chi Tiết Tài Liệu Tham Khảo}
-\label{app:references}
+% Bỏ comment \appendix và \input{chapters/appendix} trong main.tex khi cần in phụ lục.
 
-\begin{longtable}{>{\bfseries}p{2.5cm} p{3.5cm} p{7cm}}
+\chapter{Artefact, Phạm Vi và Khả Năng Tái Lập}
+\label{app:artefact}
+
+Phụ lục này mô tả artefact phần mềm tương ứng với các chương thiết kế, kiểm chứng và đạo đức. Nó không thay thế tài liệu vận hành trong thư mục \texttt{source/}, cũng không công bố kết quả thực nghiệm mới. Mục đích là giúp người đọc phân biệt giữa năng lực đã có trong MVP, điều kiện để tái lập một lần chạy, và các hạng mục chỉ mới ở mức hướng phát triển.
+
+\section{Phạm vi runtime hiện tại}
+Runtime của MVP là \texttt{baseline-rules-v2}. Luồng đã được hiện thực là:
+
+\begin{center}
+\texttt{Google Meet $\rightarrow$ Vexa $\rightarrow$ FastAPI $\rightarrow$ PostgreSQL/outbox $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ SSE Dashboard}.
+\end{center}
+
+Vexa là nhà cung cấp bot và transcript; dịch vụ của đề tài sở hữu bản sao transcript, revision, analysis run, prediction, aggregate và dashboard. PostgreSQL là nguồn dữ liệu chuẩn; Valkey Stream chỉ vận chuyển công việc cho worker và không thay thế lưu trữ bền vững. Dashboard chỉ gọi backend, không truy cập Vexa, PostgreSQL, Valkey hoặc API key.
+
+\begin{longtable}{p{0.28\linewidth}p{0.30\linewidth}p{0.32\linewidth}}
 \toprule
-\textbf{Tài liệu} & \textbf{Lý do chọn} & \textbf{Đóng góp cho nghiên cứu} \\
+\textbf{Thành phần} & \textbf{Trạng thái trong MVP} & \textbf{Không được suy diễn} \\
 \midrule
 \endhead
 \bottomrule
 \endfoot
-{[6] DSM-5}       & Gold standard quốc tế cho chẩn đoán tâm thần          & Định nghĩa nhãn dữ liệu, ánh xạ 9 triệu chứng → đặc trưng ngôn ngữ \\[6pt]
-{[7] PHQ-9}       & Công cụ sàng lọc được xác nhận tiếng Việt             & Cơ sở gán nhãn nhị phân, ngưỡng phân loại \\[6pt]
-{[8] Vaswani 2017}& Foundation kiến trúc mọi mô hình BERT-based           & Hiểu cơ chế attention, giải thích nền tảng kỹ thuật \\[6pt]
-{[9] BERT}        & Breakthrough NLP, pre-training paradigm               & Hiểu fine-tuning, so sánh baseline \\[6pt]
-{[10] PhoBERT}    & SOTA tiếng Việt, open-source                          & Mô hình cốt lõi hệ thống \\[6pt]
-{[11] Yates 2017} & RSDD benchmark, pioneering work                       & Baseline methodology, linguistic features \\[6pt]
-{[12] Trotzek}    & Systematic review NLP depression methods              & Linguistic markers, model comparison methodology \\[6pt]
-{[13] Tuyền 2025} & Tiên phong depression detection tiếng Việt            & Foundation trực tiếp, domain gap analysis \\[6pt]
-{[14] Whisper}    & SOTA ASR đa ngôn ngữ, self-hostable                   & Module ASR trong pipeline \\[6pt]
-{[15] VnCoreNLP}  & Toolkit NLP tiếng Việt đầy đủ nhất                    & Word segmentation, tiền xử lý \\[6pt]
-{[16] Cummins}    & Systematic review acoustic features và trầm cảm       & Cơ sở lý thuyết (phần so sánh với multimodal) \\[6pt]
-{[19] GDPR}       & Quy định pháp lý EU về dữ liệu cá nhân               & Thiết kế privacy, consent management \\[6pt]
-{[20] Luật ANMVN} & Quy định pháp lý Việt Nam                             & Self-hosted option, data sovereignty requirement \\[6pt]
-{[21] EU AI Act}  & Khung quy định AI nguy cơ cao                         & Nguyên tắc đạo đức AI cho hệ thống y tế \\[6pt]
-{[22] Privacy by Design} & Framework thiết kế quyền riêng tư 7 nguyên tắc & Nguyên tắc thiết kế tổng thể hệ thống \\
+Nguồn họp & Google Meet qua Vexa & Teams, Zoom hoặc Jitsi đã tích hợp \\
+Classifier & Luật xác định \texttt{baseline-rules-v2} sau adapter & PhoBERT/custom model đã fine-tune hoặc tốt hơn baseline \\
+Phân phối kết quả & REST analytics và SSE từ FastAPI tới dashboard & WebSocket, cảnh báo tự động hoặc quyết định tự động \\
+Hạ tầng & Docker Compose cục bộ, PostgreSQL, Valkey, backend, worker, Nginx dashboard & HA, autoscaling, Kubernetes, SLO/SLA hay production security hoàn chỉnh \\
+Quyền truy cập & \texttt{X-App-User-Id} phục vụ development; ownership được kiểm tra trong API & SSO, JWT/OIDC hoặc RBAC production \\
 \end{longtable}
 
-\chapter{Hướng Dẫn Cài Đặt và Triển Khai}
-\label{app:installation}
+\section{Cấu trúc source và cấu hình}
+Entry point của artefact là thư mục \texttt{source/}. Chỉ \texttt{source/compose.yaml} và \texttt{source/src/} là đường build/chạy ứng dụng hiện hành; thư mục \texttt{meeting-intelligence-backend/} được giữ lại trong giai đoạn chuyển đổi và không dùng cho demo mới.
 
-\section{Yêu cầu hệ thống}
-
-\begin{itemize}
-  \item Docker 24.x và Docker Compose 2.x
-  \item Python 3.11+ (cho development)
-  \item Node.js 20+ (cho Chrome Extension)
-  \item GPU NVIDIA với CUDA 12.x (tùy chọn, cho training)
-\end{itemize}
-
-\section{Cài đặt môi trường Development}
-
-\begin{lstlisting}[style=bashstyle, caption={Cài đặt development environment}]
-# 1. Clone repository
-git clone https://github.com/[username]/vietnamese-emotion-detection
-cd vietnamese-emotion-detection
-# 2. Tao file moi truong (.env)
-cp .env.example .env
-# Chinh sua cac bien moi truong trong .env
-
-# 3. Download PhoBERT ONNX model
-python scripts/download_model.py --quantize int8
-
-# 4. Khoi dong tat ca services
-docker compose up -d
-
-# 5. Kiem tra trang thai
-docker compose ps
-
-# 6. Xem logs
-docker compose logs -f inference-engine
-
-# 7. Test API
-curl -X POST http://localhost:8000/api/v1/text/analyze \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"text": "toi thay minh khong co gia tri gi ca"}'
+\begin{lstlisting}[style=bashstyle, caption={Cấu trúc rút gọn của artefact}]
+source/
+├── compose.yaml                 # application Compose
+├── settings.env.example         # mẫu cấu hình, có thể commit
+├── settings.env                 # secret cục bộ, không commit
+├── src/backend/                 # FastAPI, worker, test, Dockerfile
+├── src/dashboard/               # static dashboard và Nginx
+├── scripts/                     # bootstrap, verify, smoke, audit
+└── vexa/                        # Vexa meetings/transcript-only self-host
 \end{lstlisting}
 
-\begin{notebox}
-Bổ sung hướng dẫn chi tiết: (1) cách chạy fine-tuning PhoBERT trên Google Colab (link notebook); (2) cách cài Chrome Extension vào Chrome; (3) cách kết nối với Jitsi Meet test instance; (4) troubleshooting các lỗi thường gặp.
-\end{notebox}
+\texttt{settings.env} chứa URL PostgreSQL/Valkey, port, \texttt{MODEL\_VERSION}, \texttt{PREPROCESSING\_VERSION}, Vexa API base/key, webhook URL và webhook secret. File này không được đưa vào Git, log, image, dashboard hoặc evidence bundle. Dashboard và backend chỉ bind loopback ở cấu hình MVP; khi công khai dịch vụ cần reverse proxy TLS, quản lý secret và xác thực/ủy quyền production như đã nêu ở Chương~\ref{chap:infrastructure}.
 
-\chapter{Mẫu Thông Báo Consent cho Người Dùng}
-\label{app:consent}
+\section{Quy trình khởi động và kiểm chứng}
+Máy chạy cần Docker Engine và Docker Compose v2. Vexa self-host còn cần Docker Engine phiên bản phù hợp cùng transcription credential/service. Các lệnh sau là quy trình tham chiếu; người vận hành phải tạo secret và cấu hình Vexa trước khi khởi động application.
 
-\begin{mdframed}[linecolor=accentblue, linewidth=1.5pt, topline=true]
-\textbf{\large THÔNG BÁO VỀ PHÂN TÍCH CẢM XÚC TỰ ĐỘNG}
+\begin{lstlisting}[style=bashstyle, caption={Khởi động application và kiểm tra reachability}]
+cd source
+./scripts/bootstrap.sh
+# Chỉnh sửa settings.env cục bộ; không commit file này.
 
-\vspace{0.5em}
+# Khởi động Vexa meetings-only và tạo API key theo tài liệu source/README.md.
+docker compose --env-file settings.env config
+docker compose --env-file settings.env up -d --build
+./scripts/verify.sh
+./scripts/runtime-status.sh
+\end{lstlisting}
 
-Phiên họp/học này sử dụng hệ thống AI để phân tích văn bản hội thoại nhằm hỗ trợ nhận biết sớm dấu hiệu căng thẳng tâm lý.
+\texttt{verify.sh} chỉ kiểm tra \texttt{docker compose ps}, \texttt{/ready} và HTML dashboard trên loopback. \texttt{runtime-status.sh} lập biên bản read-only về container, port và readiness mà không in credential, transcript hoặc environment của container. Hai script chứng minh reachability tại thời điểm chạy, không phải load test, security assessment hay bằng chứng chất lượng model.
 
-\vspace{0.5em}
-\textbf{Hệ thống CHỈ phân tích văn bản transcript -- KHÔNG thu thập audio, video hay khuôn mặt của bạn.}
+Kiểm tra pipeline nội bộ dùng fixture tổng hợp, không gọi Vexa và không dùng transcript thật:
 
-\vspace{0.5em}
-\textbf{Đây là công cụ hỗ trợ, KHÔNG phải chẩn đoán y tế. Kết quả chỉ được chia sẻ với người giám sát được ủy quyền.}
+\begin{lstlisting}[style=bashstyle, caption={Smoke test API--queue--worker--analytics}]
+cd source
+./scripts/smoke-analysis-pipeline.sh
+\end{lstlisting}
 
-\vspace{0.5em}
-Bạn có thể opt-out bất kỳ lúc nào trong \textit{Settings > Quản lý Consent}. Khi opt-out, toàn bộ dữ liệu của bạn sẽ được xóa trong vòng 48 giờ.
+Script tạo một meeting fixture và hai segment tiếng Việt tổng hợp, yêu cầu final analysis, đợi worker hoàn tất, sau đó kiểm tra \texttt{status=succeeded}, coverage bằng $1$, hai analysis unit và nhãn \textit{positive}/\textit{negative}. Fixture cùng các row phụ thuộc được xóa theo UUID khi script kết thúc. Do input được cố ý chọn để khớp luật baseline, kết quả pass không được báo cáo là accuracy, F1 hoặc benchmark sentiment.
 
-\vspace{1em}
-\begin{center}
-\large $\square$ \textbf{Tôi đã đọc và đồng ý với các điều khoản trên}
-\end{center}
-\end{mdframed}
+\section{Hợp đồng API của MVP}
+Các endpoint dưới đây phản ánh route trong mã nguồn tại thời điểm biên soạn. Ngoại trừ health/readiness và webhook, API meeting yêu cầu định danh caller; \texttt{X-App-User-Id} là cơ chế development, không phải hướng dẫn authentication production. Chi tiết request/response được cung cấp bởi OpenAPI của FastAPI khi service đang chạy.
 
-\chapter{Danh Sách API Endpoints}
-\label{app:api}
-
-\begin{longtable}{llp{6cm}l}
+\begin{longtable}{p{0.12\linewidth}p{0.48\linewidth}p{0.28\linewidth}}
 \toprule
-\textbf{Method} & \textbf{Endpoint} & \textbf{Mô tả} & \textbf{Auth} \\
+\textbf{Method} & \textbf{Endpoint} & \textbf{Mục đích} \\
 \midrule
 \endhead
 \bottomrule
 \endfoot
-POST      & /api/v1/sessions              & Tạo phiên giám sát mới          & Bearer JWT \\
-DELETE    & /api/v1/sessions/\{id\}       & Kết thúc phiên                   & Bearer JWT \\
-GET       & /api/v1/sessions/\{id\}/results & Lấy kết quả phiên              & Bearer JWT \\
-WebSocket & /ws/sessions/\{id\}/stream    & Real-time risk score updates     & Bearer JWT \\
-POST      & /api/v1/text/analyze          & Phân tích đoạn văn bản           & Bearer JWT \\
-GET       & /api/v1/reports/\{session\_id\} & Xuất báo cáo phiên PDF         & Bearer JWT \\
-POST      & /api/v1/consent               & Ghi nhận consent người dùng      & Bearer JWT \\
-DELETE    & /api/v1/consent/\{user\_id\}  & Thu hồi consent + xóa dữ liệu   & Bearer JWT \\
-GET       & /health                       & Health check endpoint            & None \\
-GET       & /metrics                      & Prometheus metrics               & Internal \\
+GET & \texttt{/health} & Liveness cơ bản của backend \\
+GET & \texttt{/ready} & Readiness; kiểm tra PostgreSQL và Valkey \\
+POST & \texttt{/v1/meetings} & Tạo meeting ứng dụng và yêu cầu Vexa spawn bot cho URL Google Meet hợp lệ \\
+GET & \texttt{/v1/meetings?limit=...} & Danh sách meeting mới nhất của owner \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}} & Trạng thái meeting thuộc owner \\
+POST & \texttt{/v1/meetings/\{meeting\_id\}/sync} & Reconcile transcript từ Vexa \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/transcript} & Đọc segment không bị retracted \\
+POST & \texttt{/v1/meetings/\{meeting\_id\}/stop} & Yêu cầu dừng bot \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/events} & SSE event phục vụ refresh dashboard \\
+POST & \texttt{/v1/meetings/\{meeting\_id\}/analysis?kind=final} & Tạo/queue analysis run \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/analysis} & Đọc analysis run \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/analytics/overview} & KPI và coverage của run hiện hành \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/analytics/timeline} & Tổng hợp theo cửa sổ thời gian \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/analytics/speakers} & Tổng hợp theo speaker \\
+GET & \texttt{/v1/meetings/\{meeting\_id\}/analytics/units} & Unit, prediction và evidence \\
+POST & \texttt{/v1/webhooks/vexa} & Nhận webhook Vexa; xác minh HMAC, timestamp và event deduplication \\
 \end{longtable}
 
-\chapter{Tiến Độ Thực Hiện Đề Tài}
-\label{app:timeline}
+Webhook dùng chữ ký \texttt{sha256(HMAC(secret, timestamp + ``.'' + raw\_body))}; timestamp quá năm phút hoặc chữ ký sai bị từ chối. Endpoint cần một HTTPS URL mà Vexa có thể truy cập. Polling/reconcile transcript vẫn là fallback khi webhook trễ hoặc thất bại; điều này không loại bỏ yêu cầu kiểm thử webhook valid, tampered và replay trong môi trường được cấp consent.
+
+\section{Mẫu evidence bundle cho một lần chạy}
+Một lần kiểm chứng chỉ được ghi nhận là pass khi có artefact quan sát được. Bảng~\ref{tab:appendix-evidence} là mẫu tối thiểu để đính kèm cùng báo cáo; tuyệt đối không điền secret hoặc transcript thật.
 
 \begin{table}[H]
 \centering
-\caption{Tiến độ thực hiện 9 tháng}
-\label{tab:timeline}
-\begin{tabularx}{\linewidth}{lX*{9}{c}}
+\caption{Mẫu evidence bundle đã redaction}
+\label{tab:appendix-evidence}
+\begin{tabularx}{\linewidth}{p{0.34\linewidth}X}
 \toprule
-\textbf{GĐ} & \textbf{Nội dung} & \textbf{T1} & \textbf{T2} & \textbf{T3} & \textbf{T4} & \textbf{T5} & \textbf{T6} & \textbf{T7} & \textbf{T8} & \textbf{T9} \\
+\textbf{Trường} & \textbf{Giá trị cần ghi} \\
 \midrule
-1 & Nghiên cứu tài liệu    & $\bullet$ & $\bullet$ & & & & & & & \\
-2 & Thu thập, gán nhãn dữ liệu & & $\bullet$ & $\bullet$ & & & & & & \\
-3 & Thiết kế kiến trúc     & & $\bullet$ & $\bullet$ & & & & & & \\
-4 & Fine-tuning \& benchmark & & & $\bullet$ & $\bullet$ & & & & & \\
-5 & Phát triển backend     & & & & $\bullet$ & $\bullet$ & & & & \\
-6 & Platform integrations  & & & & & $\bullet$ & $\bullet$ & & & \\
-7 & Phát triển frontend    & & & & & $\bullet$ & $\bullet$ & & & \\
-8 & Testing \& đánh giá    & & & & & & $\bullet$ & $\bullet$ & & \\
-9 & Viết luận văn          & & & & & & & $\bullet$ & $\bullet$ & $\bullet$ \\
+Thời điểm, operator và môi trường & UTC, máy/môi trường, mục đích run \\
+Phiên bản artefact & Git commit hoặc image digest; version Compose \\
+Cấu hình & Tên profile/port/model/preprocessing đã redaction, không có secret \\
+Lệnh và kết quả & Command, exit code, vị trí log hoặc CI artifact \\
+Dữ liệu & Fixture tổng hợp hoặc bằng chứng consent/approval của E2E thật; không chép transcript vào báo cáo \\
+Kết quả pipeline & Meeting UUID, revision, analysis status, accepted/rejected unit, coverage \\
+Evidence giao diện & API response đã redaction, ảnh dashboard hoặc SSE event ID nếu phù hợp \\
+Giới hạn/failure & Điều kiện chưa đo, retry, lỗi và cách cleanup \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\section{Mẫu thông báo và consent trước vận hành}
+Đoạn sau là \textbf{mẫu nội dung khởi đầu}, không phải form consent đã triển khai hay tư vấn pháp lý. Tổ chức triển khai phải rà soát với bộ phận pháp chế/DPIA, xác định controller/processor, thời hạn lưu, quyền của chủ thể dữ liệu và cơ sở xử lý phù hợp. Việc tham dự cuộc họp không tự động đồng nghĩa với đồng ý phân tích transcript. Nguyên tắc này nhất quán với tối thiểu hóa dữ liệu, minh bạch và privacy-by-design \cite{decree132023,cavoukian2011}.
+
+\begin{mdframed}[linecolor=accentblue, linewidth=1.0pt, topline=true]
+\textbf{Thông báo dự kiến về phân tích transcript cuộc họp}
+
+Cuộc họp có thể sử dụng hệ thống xử lý transcript để hỗ trợ xem lại \emph{nội dung trao đổi}. Hệ thống xử lý transcript, thông tin người nói/thời điểm và kết quả sentiment ở mức đoạn; kết quả không phải chẩn đoán sức khỏe, không dùng để xếp hạng cá nhân hoặc ra quyết định tự động.
+
+Trước khi tham gia, bạn cần được biết: mục đích và phạm vi xử lý; nguồn dữ liệu; người có quyền truy cập; nơi và thời hạn lưu; cách liên hệ để hỏi, rút/điều chỉnh đồng ý hoặc yêu cầu xử lý dữ liệu; cùng các giới hạn của kết quả. Nội dung thông báo, cơ chế ghi nhận consent, thời hạn xóa và quy trình đáp ứng yêu cầu phải được cấu hình và kiểm thử trước khi dùng dữ liệu thật.
+\end{mdframed}
+
+\section{Danh mục không thuộc phạm vi MVP}
+Các chức năng sau không được mô tả như đã hoàn thành trong luận văn: phát hiện trầm cảm/tự hại, cảnh báo khủng hoảng, Chrome extension, thu audio/video trực tiếp, Chrome/Jitsi integration, fine-tuning PhoBERT, serving ONNX/GPU, MLflow service, benchmark đa mô hình, WER ASR, load/UX study, JWT/SSO/RBAC production, xóa dữ liệu theo SLA, hoặc báo cáo tuân thủ GDPR/EU AI Act/Nghị định 13. Mọi mục mở rộng cần có thiết kế, kiểm thử và bằng chứng riêng trước khi được đưa vào kết quả nghiên cứu hoặc vận hành.

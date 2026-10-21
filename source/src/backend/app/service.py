@@ -4,12 +4,25 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .config import get_settings
 from .models import Meeting, OutboxEvent, TranscriptSegment
 from .vexa import VexaClient
 
 
 def _segment_id(raw: dict, index: int) -> str:
     return str(raw.get("segment_id") or f"legacy:{raw.get('start', 0)}:{raw.get('end', 0)}:{index}")
+
+
+def _speaker_identity(raw: dict, fallback_name: str) -> tuple[str | None, str | None]:
+    """Preserve provider attribution, using a verified local host only as fallback."""
+    provided_name = str(raw.get("speaker") or "").strip()
+    provided_key = str(raw.get("speaker_key") or "").strip()
+    fallback_name = fallback_name.strip()
+    if provided_name:
+        return provided_key or None, provided_name
+    if fallback_name:
+        return provided_key or f"fallback:{fallback_name.casefold()}", fallback_name
+    return provided_key or None, None
 
 
 async def get_owned_meeting(db: AsyncSession, meeting_id: UUID, owner_id: str) -> Meeting:
@@ -23,6 +36,7 @@ async def get_owned_meeting(db: AsyncSession, meeting_id: UUID, owner_id: str) -
 
 async def reconcile(db: AsyncSession, vexa: VexaClient, meeting: Meeting) -> dict:
     payload = await vexa.transcript(meeting.platform, meeting.native_meeting_id)
+    fallback_name = get_settings().fallback_speaker_name
     changed = 0
     for index, raw in enumerate(payload.get("segments") or []):
         segment_id = _segment_id(raw, index)
@@ -32,9 +46,10 @@ async def reconcile(db: AsyncSession, vexa: VexaClient, meeting: Meeting) -> dic
                 TranscriptSegment.vexa_segment_id == segment_id,
             )
         )
+        speaker_key, speaker_name = _speaker_identity(raw, fallback_name)
         values = {
-            "speaker_key": raw.get("speaker_key"),
-            "speaker_name": raw.get("speaker"),
+            "speaker_key": speaker_key,
+            "speaker_name": speaker_name,
             "language": raw.get("language"),
             "text": raw.get("text") or "",
             "start_seconds": float(raw.get("start") or 0),

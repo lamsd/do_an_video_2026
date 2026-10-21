@@ -16,15 +16,20 @@
       </form>
       <p id="status" role="status">Đang tìm meeting mới nhất…</p>
       <p id="active-meeting" class="active-meeting" hidden></p>
-      <section id="transcript-section" hidden>
-        <h2>Transcript trực tiếp</h2><p id="transcript-meta"></p><div id="transcript"></div>
-      </section>
       <section id="metrics" class="cards" hidden></section>
+      <section id="speaker-section" hidden>
+        <h2>Phân tích theo người nói</h2>
+        <p>Điểm và tỷ lệ được tính độc lập cho từng speaker từ transcript final.</p>
+        <div id="speaker-metrics" class="speaker-cards"></div>
+      </section>
       <section id="timeline-section" hidden>
-        <h2>Sắc thái theo thời gian</h2><div id="timeline" class="timeline"></div>
+        <h2>Sắc thái toàn cuộc họp theo thời gian</h2><div id="timeline" class="timeline"></div>
       </section>
       <section id="evidence-section" hidden>
         <h2>Evidence transcript</h2><div id="evidence"></div>
+      </section>
+      <section id="transcript-section" hidden>
+        <h2>Transcript trực tiếp</h2><p id="transcript-meta"></p><div id="transcript"></div>
       </section>
     </main>
     <template id="evidence-item">
