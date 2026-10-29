@@ -37,14 +37,15 @@ async def _liveness_loop(app: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    database_url = settings.resolved_database_url
     settings.media_root.mkdir(parents=True, exist_ok=True)
-    if settings.database_url.startswith("sqlite:///"):
-        database_file = Path(settings.database_url.removeprefix("sqlite:///"))
+    if database_url.startswith("sqlite:///"):
+        database_file = Path(database_url.removeprefix("sqlite:///"))
         database_file.parent.mkdir(parents=True, exist_ok=True)
     # Docker/PostgreSQL is migrated by Alembic before Uvicorn starts. Keeping this narrow
     # bootstrap path makes isolated SQLite simulator/test runs convenient without bypassing
     # production migrations.
-    if settings.database_url.startswith("sqlite:///"):
+    if database_url.startswith("sqlite:///"):
         Base.metadata.create_all(bind=engine)
     _seed_devices()
     coordinator = TurnCoordinator(settings, SessionLocal)

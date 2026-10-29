@@ -21,7 +21,9 @@ source/
 │   └── dashboard/               # Dashboard static + Nginx image
 ├── scripts/
 │   ├── bootstrap.sh
-│   └── verify.sh
+│   ├── verify.sh
+│   ├── runtime-settings.sh      # local secret/model setup + safe recreate
+│   └── dashboard-acceptance.sh # UAT read-only, không đọc transcript
 └── vexa/                        # Vexa meetings/transcript-only
 ```
 
@@ -55,6 +57,33 @@ Sửa `settings.env` cục bộ. Các biến cần chú ý:
 | `VEXA_WEBHOOK_URL` | HTTPS URL public của `/v1/webhooks/vexa`; dùng khi cấu hình Vexa webhook. |
 
 Không commit `settings.env`, không đặt key trong Dashboard và không log file này. Production phải thay mọi placeholder và lưu secret bằng secret manager hoặc file quyền `600`.
+
+### Cấu hình vận hành từ Dashboard
+
+Dashboard có mục **Cấu hình, model và tích hợp**. Mục này chỉ đọc trạng thái an toàn (model, ngưỡng, chu kỳ polling, integration đã/cần cấu hình); nó không gửi, hiện hoặc lưu API key trong trình duyệt. Nút trên dashboard sao chép đúng lệnh cục bộ để người vận hành chạy trong terminal:
+
+```bash
+cd source
+chmod 755 scripts/runtime-settings.sh
+./scripts/runtime-settings.sh wizard
+```
+
+Wizard che input `VEXA_API_KEY`, kiểm tra prefix `vxa_`, và cho phép chọn `rules` hoặc `tfidf-logreg`, model version, preprocessing version và threshold. Với `tfidf-logreg`, wizard yêu cầu directory artifact được mount dưới `/models` và SHA-256 64 ký tự. Xem trạng thái mà không in secret:
+
+```bash
+./scripts/runtime-settings.sh status
+```
+
+Sau khi chỉ thay `settings.env`, bắt buộc recreate container vì `docker compose restart` **không nạp lại** `env_file`:
+
+```bash
+./scripts/runtime-settings.sh apply
+./scripts/verify.sh
+```
+
+`apply` chạy kiểm tra Compose, build image hiện tại và force-recreate `backend`, `worker`, `dashboard`; PostgreSQL và Valkey giữ nguyên volume. Browser không được quyền ghi `settings.env` hoặc điều khiển Docker socket. Tích hợp mới phải được thêm vào registry backend `app/api/operator_settings.py` với trạng thái/boolean an toàn, và xử lý secret qua script cục bộ hoặc secret manager.
+
+Xem [hướng dẫn cài đặt và chạy theo từng bước](../docs/operations/SETTINGS_AND_RUN_GUIDE.md) để khởi tạo lần đầu, rotate API key, cấu hình model, build/restart, kiểm chứng và chạy Google Meet test.
 
 ### Tạo secrets và Vexa API key
 
@@ -171,6 +200,17 @@ cd source
 
 Script tạo hai segment tiếng Việt tổng hợp, chờ final analysis hoàn tất và xóa meeting fixture cùng dữ liệu phụ thuộc trước khi thoát.
 
+Sau một run có trạng thái `succeeded`, kiểm tra dữ liệu bắt buộc của Dashboard mà không tải transcript/evidence:
+
+```bash
+cd source
+./scripts/dashboard-acceptance.sh "<APPLICATION_MEETING_UUID>"
+```
+
+Lệnh chỉ in run/version/revision, coverage và batch duration; không in secret hoặc nội dung họp. Xem
+[kế hoạch nghiệm thu Dashboard](../docs/operations/APPLICATION_DASHBOARD_DEPLOYMENT_PLAN.md) để thực hiện
+theo checkpoint và ghi evidence UAT.
+
 Thực hiện theo thứ tự:
 
 1. `docker compose ... config`: kiểm cấu hình, biến required và không có network/port hard-code.
@@ -185,6 +225,8 @@ Không dùng transcript cuộc họp thật trong Git, fixture hoặc CI logs. R
 ## Model sentiment cho pilot
 
 `rules` chỉ là baseline kiểm chứng pipeline. Adapter `tfidf-logreg` nạp một artifact scikit-learn versioned từ `/models`, kiểm tra SHA-256 và dừng worker khi artifact/config không nhất quán - không tự fallback sang rules. Quy trình tạo artifact, manifest dữ liệu và cách cấu hình runtime ở [model-data/README.md](model-data/README.md). Corpus đào tạo phải được phép sử dụng, tách khỏi transcript vận hành và không phải dữ liệu phân loại trầm cảm trong `Reports/`.
+
+Để chạy rules và TF--IDF trên cùng transcript revision, chọn lại evidence theo model/run trên dashboard và đo CPU/GPU hoặc máy DEV/UAT bằng một protocol nhất quán, xem [Model experiment runbook](../docs/operations/MODEL_EXPERIMENT_RUNBOOK.md). Bảng dashboard chỉ biểu diễn chỉ số vận hành; Macro-F1 chỉ lấy từ locked test có ground truth.
 
 Use case pilot duy nhất là retrospective sau cuộc họp: người vận hành xem timeline, transcript và evidence tại Dashboard, không dùng output để đánh giá con người. Xem [pilot/retrospective/README.md](pilot/retrospective/README.md) trước khi chạy meeting thật; consent và dữ liệu thật không được đưa vào repository.
 

@@ -23,7 +23,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Mở <http://localhost:8080>. Khi bốn thẻ thiết bị có trạng thái trực tuyến, nhập đề tài và bắt đầu phiên. Nếu không đặt `OPENAI_API_KEY`, backend tạo văn bản mẫu ngoài tuyến và tone WAV được dán nhãn rõ ràng để kiểm thử đường đi MQTT; tone này không phải tiếng nói có ngữ nghĩa. Nếu đặt khóa OpenAI ở backend, mỗi lượt tạo tiếng Việt và WAV bằng OpenAI TTS.
+Docker Compose truyền `POSTGRES_PASSWORD` trực tiếp cho backend và tạo PostgreSQL URL an toàn. Chỉ đặt `DATABASE_URL` khi chạy backend ngoài Docker; đây là credential DB, không phải MQTT password.
+
+Mở <http://localhost:8080>. Khi bốn thẻ thiết bị có trạng thái trực tuyến, nhập đề tài và bắt đầu phiên. Nếu không đặt `OPENAI_API_KEY`, backend tạo văn bản mẫu ngoài tuyến và tone WAV được dán nhãn rõ ràng để kiểm thử đường đi MQTT; tone này không phải tiếng nói có ngữ nghĩa. Nếu đặt khóa OpenAI ở backend, mỗi lượt tạo tiếng Việt và WAV bằng OpenAI TTS. Mặc định là `tts-1` để thử nghiệm nhanh, độ trễ thấp; có thể đặt `OPENAI_TTS_MODEL=gpt-4o-mini-tts` nếu cần điều khiển phong cách giọng chi tiết hơn. Mỗi WAV được đo RMS/peak sau khi tạo; WAV im lặng hoặc TTS lỗi được thay bằng tone kiểm thử và ghi rõ nguồn trong dashboard.
 
 Thứ tự một vòng là hữu hạn và được điều phối tập trung:
 

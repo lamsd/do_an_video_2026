@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import wave
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ import numpy as np
 from app.config import Settings
 from app.emotion.interfaces import model_not_available
 from app.identities import AgentIdentity
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -32,28 +35,61 @@ class AudioPipeline:
         directory = self.settings.media_root / session_id
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / f"{turn_id}.wav"
+        fallback_reason: str | None = None
         if self.settings.openai_api_key:
-            self._openai_tts(path, agent, text)
-            backend = "openai-tts"
+            try:
+                self._openai_tts(path, agent, text)
+                backend = "openai-tts"
+            except Exception as error:
+                # Preserve an audible artifact for the experiment path, but never label the
+                # fallback as speech. API credentials/network errors stay visible in logs.
+                log.exception("OpenAI TTS failed for turn %s; writing a labelled test tone", turn_id)
+                self._placeholder_tone(path, agent, text)
+                backend = "synthetic-tone-fallback"
+                fallback_reason = type(error).__name__
         else:
             self._placeholder_tone(path, agent, text)
             backend = "synthetic-tone-placeholder"
-        return AudioArtifact(path=path, features=self._extract(path), tts_backend=backend)
+
+        rms_energy, peak_amplitude = self._signal_levels(path)
+        if rms_energy <= 0.0005 or peak_amplitude <= 0.002:
+            if backend == "openai-tts":
+                log.error("OpenAI returned a silent WAV for turn %s; writing a labelled test tone", turn_id)
+                self._placeholder_tone(path, agent, text)
+                backend = "synthetic-tone-fallback"
+                fallback_reason = "silent_wav"
+                rms_energy, peak_amplitude = self._signal_levels(path)
+            if rms_energy <= 0.0005 or peak_amplitude <= 0.002:
+                raise RuntimeError("Audio generation produced a silent WAV after fallback")
+
+        features = self._extract(path)
+        features["audibility_check"] = {
+            "status": "passed",
+            "rms_energy": round(rms_energy, 6),
+            "peak_amplitude": round(peak_amplitude, 6),
+        }
+        if fallback_reason:
+            features["tts_fallback_reason"] = fallback_reason
+        return AudioArtifact(path=path, features=features, tts_backend=backend)
 
     def _openai_tts(self, path: Path, agent: AgentIdentity, text: str) -> None:
         from openai import OpenAI
 
         client = OpenAI(api_key=self.settings.openai_api_key)
-        with client.audio.speech.with_streaming_response.create(
-            model=self.settings.openai_tts_model,
-            voice=agent.voice,
-            input=text,
-            instructions=(
+        request: dict[str, str] = {
+            "model": self.settings.openai_tts_model,
+            "voice": agent.voice,
+            "input": text,
+            "response_format": "wav",
+        }
+        # `instructions` is a gpt-4o-mini-tts feature.  Leaving it out for tts-1
+        # keeps the lightweight model compatible while preserving four fixed voices.
+        if self.settings.openai_tts_model == "gpt-4o-mini-tts":
+            request["instructions"] = (
                 f"Nói hoàn toàn bằng tiếng Việt với phong cách {agent.speaking_style}. "
                 "Đây là tác nhân AI được gắn nhãn rõ ràng trong nghiên cứu."
-            ),
-            response_format="wav",
-        ) as response:
+            )
+        with client.audio.speech.with_streaming_response.create(**request) as response:  # type: ignore[arg-type]
             response.stream_to_file(path)
 
     @staticmethod
@@ -73,6 +109,18 @@ class AudioPipeline:
             output.setsampwidth(2)
             output.setframerate(sample_rate)
             output.writeframes((signal * 32767).astype("<i2").tobytes())
+
+    @staticmethod
+    def _signal_levels(path: Path) -> tuple[float, float]:
+        """Return linear RMS and peak for a PCM WAV, rejecting empty/corrupt artifacts."""
+        with wave.open(str(path), "rb") as source:
+            if source.getnchannels() < 1 or source.getsampwidth() != 2 or source.getnframes() == 0:
+                return 0.0, 0.0
+            samples = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2").astype(np.float32)
+        if not samples.size:
+            return 0.0, 0.0
+        normalized = samples / 32768.0
+        return float(np.sqrt(np.mean(np.square(normalized)))), float(np.max(np.abs(normalized)))
 
     def _extract(self, path: Path) -> dict[str, Any]:
         try:

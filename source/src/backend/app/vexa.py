@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import httpx
 
 MEET_CODE = re.compile(
-    r"^https?://meet\.google\.com/([a-z]{3}-[a-z]{4}-[a-z]{3})(?:[/?#].*)?$", re.IGNORECASE
+    r"^https?://meet\.google\.com/(?:meet/)?([a-z]{3}-[a-z]{4}-[a-z]{3})(?:[/?#].*)?$", re.IGNORECASE
 )
 
 
@@ -24,7 +24,8 @@ def parse_google_meet_url(url: str) -> ParsedMeeting:
     match = MEET_CODE.match(url.strip())
     if not match:
         raise ValueError(
-            "meeting_url must be a Google Meet URL such as https://meet.google.com/abc-defg-hij"
+            "meeting_url must be a Google Meet URL such as "
+            "https://meet.google.com/abc-defg-hij or https://meet.google.com/meet/abc-defg-hij"
         )
     return ParsedMeeting(platform="google_meet", native_meeting_id=match.group(1).lower())
 

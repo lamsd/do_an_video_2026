@@ -17,6 +17,14 @@ function audioFeatures(turn: Turn) {
   ];
 }
 
+function audioSource(turn: Turn) {
+  const backend = String(turn.acoustic_metadata?.tts_backend ?? "unknown");
+  if (backend === "openai-tts") return "Giọng tổng hợp OpenAI";
+  if (backend === "synthetic-tone-fallback") return "Tone kiểm thử: OpenAI TTS lỗi; không phải lời nói.";
+  if (backend === "synthetic-tone-placeholder") return "Tone kiểm thử: chưa cấu hình OpenAI API key; không phải lời nói.";
+  return `Nguồn âm thanh: ${backend}`;
+}
+
 function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -129,6 +137,7 @@ function App() {
               <div><span>Lượt {turn.sequence} · vòng {turn.round_number}</span><h3>{agent?.display_name ?? turn.agent_id}</h3></div>
               <p>{turn.transcript}</p>
               {turn.audio_url && <audio controls src={`${api.base}${turn.audio_url}`}>Trình duyệt không hỗ trợ phát WAV.</audio>}
+              <small>{audioSource(turn)}</small>
               <dl>{audioFeatures(turn).map(([name, value]) => <div key={String(name)}><dt>{String(name)}</dt><dd>{String(value)}</dd></div>)}</dl>
               <small>Cảm xúc: {String(turn.emotion_prediction?.status ?? "unavailable")} · {String(turn.emotion_prediction?.reason ?? "")}</small>
             </article>

@@ -210,10 +210,17 @@ class VirtualEsp32:
             retain=True,
         )
 
-    def _publish(self, topic: str, event: Envelope, retain: bool = False) -> None:
+    def _publish(self, topic: str, event: Envelope, retain: bool = False) -> bool:
         result = self.client.publish(topic, event.as_json_bytes(), qos=1, retain=retain)
+        if result.rc == mqtt.MQTT_ERR_NO_CONN:
+            # Paho reconnects asynchronously. A heartbeat emitted in the small interval
+            # before on_connect must not terminate all four simulated devices.
+            self.state = DeviceState.DISCONNECTED
+            log.warning("%s skipped publish while MQTT reconnects", self.identity.device_id)
+            return False
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
             raise RuntimeError(f"MQTT publish failed on {topic}: {result.rc}")
+        return True
 
     def _transition(self, next_state: DeviceState) -> None:
         if next_state == self.state:

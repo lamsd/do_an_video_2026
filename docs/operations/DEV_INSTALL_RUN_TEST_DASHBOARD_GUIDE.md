@@ -112,6 +112,16 @@ cd /home/lamsd/Documents/Buildkhoaluan/source
 ./scripts/vexa-selfhost.sh status
 ```
 
+`verify` cũng kiểm tra image runner được runtime tạo theo từng meeting. Nếu báo
+thiếu image, tải đúng image được cấu hình (image này có dung lượng vài GB):
+
+```bash
+BROWSER_IMAGE=$(awk -F= '$1 == "BROWSER_IMAGE" { print $2; exit }' settings.env)
+BROWSER_IMAGE=${BROWSER_IMAGE:-vexaai/vexa-bot:v012}
+docker pull "$BROWSER_IMAGE"
+./scripts/vexa-selfhost.sh verify
+```
+
 Nếu chưa có `VEXA_API_KEY`, tạo token rồi dán giá trị `vxa_...` vào `settings.env`:
 
 ```bash
@@ -190,7 +200,9 @@ Script tự tạo và xóa fixture; không có Google Meet hoặc transcript th�
 ## 8. Test Google Meet E2E
 
 1. Tạo Google Meet test và lấy consent người tham gia.
-2. Sao chép URL Meet đầy đủ.
+2. Sao chép URL Meet đầy đủ. Backend chấp nhận cả dạng trực tiếp
+   `https://meet.google.com/abc-defg-hij` lẫn URL có tiền tố
+   `https://meet.google.com/meet/abc-defg-hij`; không dán cú pháp Markdown `[link](...)`.
 3. Tạo bot qua backend:
 
 ```bash

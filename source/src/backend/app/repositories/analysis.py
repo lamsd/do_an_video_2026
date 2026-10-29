@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..analysis.classifier import SentimentClassifier
@@ -16,7 +17,9 @@ from ..models import (
 )
 
 
-def run_metrics(*, total_units: int, accepted_units: int, predicted_units: int) -> dict[str, float | int]:
+def run_metrics(
+    *, total_units: int, accepted_units: int, predicted_units: int, inference_total_ms: int
+) -> dict[str, float | int]:
     """Keep data acceptance distinct from usable model output.
 
     ``coverage`` is retained as a backwards-compatible alias for prediction
@@ -33,6 +36,9 @@ def run_metrics(*, total_units: int, accepted_units: int, predicted_units: int) 
         "prediction_coverage": prediction_coverage,
         "effective_coverage": effective_coverage,
         "coverage": prediction_coverage,
+        # This is an end-to-end classifier batch duration, not a fabricated
+        # per-unit percentile.  P50/P95 must come from repeated benchmark runs.
+        "inference_total_ms": inference_total_ms,
     }
 
 
@@ -85,21 +91,12 @@ async def execute_run(
             .order_by(TranscriptSegment.start_seconds)
         )
     ).all()
-    await db.execute(
-        update(AnalysisUnit)
-        .where(AnalysisUnit.meeting_id == run.meeting_id, AnalysisUnit.is_current.is_(True))
-        .values(is_current=False)
-    )
-    await db.execute(
-        update(SentimentPrediction)
-        .where(SentimentPrediction.analysis_run_id == run.id)
-        .values(is_current=False)
-    )
     drafts = build_units(segments)
     units: list[AnalysisUnit] = []
     inferable = []
     for draft in drafts:
         unit = AnalysisUnit(
+            analysis_run_id=run.id,
             meeting_id=run.meeting_id,
             source_revision=run.source_revision,
             speaker_key=draft.speaker_key,
@@ -119,7 +116,9 @@ async def execute_run(
         if draft.quality_status == "accepted":
             inferable.append((unit, draft))
     await db.flush()
+    inference_started = perf_counter()
     predictions = classifier.predict([draft for _, draft in inferable])
+    inference_total_ms = int((perf_counter() - inference_started) * 1000)
     for (unit, _), prediction in zip(inferable, predictions, strict=True):
         db.add(
             SentimentPrediction(
@@ -137,7 +136,10 @@ async def execute_run(
     accepted = len(inferable)
     predicted = sum(prediction.label != "unknown" for prediction in predictions)
     run.metrics = run_metrics(
-        total_units=len(units), accepted_units=accepted, predicted_units=predicted
+        total_units=len(units),
+        accepted_units=accepted,
+        predicted_units=predicted,
+        inference_total_ms=inference_total_ms,
     )
     run.status = "succeeded"
     run.finished_at = datetime.now(UTC)
@@ -182,6 +184,7 @@ async def _aggregate(db: AsyncSession, run: AnalysisRun) -> None:
                 score_weight += weight
         db.add(
             MeetingSentimentWindow(
+                analysis_run_id=run.id,
                 meeting_id=run.meeting_id,
                 source_revision=run.source_revision,
                 scope=scope,

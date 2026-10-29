@@ -12,7 +12,7 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(get_settings().database_url, future=True)
+engine = create_engine(get_settings().resolved_database_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

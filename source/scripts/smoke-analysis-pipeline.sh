@@ -73,14 +73,40 @@ overview=$(curl --fail --silent --show-error \
   -H 'X-App-User-Id: local-dev' "${api_base}/v1/meetings/${meeting_id}/analytics/overview")
 units=$(curl --fail --silent --show-error \
   -H 'X-App-User-Id: local-dev' "${api_base}/v1/meetings/${meeting_id}/analytics/units")
-
-printf '%s\n%s\n' "$overview" "$units" | python3 -c '
+timeline=$(curl --fail --silent --show-error \
+  -H 'X-App-User-Id: local-dev' "${api_base}/v1/meetings/${meeting_id}/analytics/timeline")
+run_id=$(printf '%s' "$overview" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run_id"])')
+window=$(printf '%s' "$timeline" | python3 -c '
 import json, sys
-overview, units = map(json.loads, sys.stdin)
+row = json.load(sys.stdin)[0]
+print("{}|{}".format(row["start"], row["end"]))
+')
+window_start=${window%%|*}
+window_end=${window#*|}
+window_units=$(curl --fail --silent --show-error --get \
+  -H 'X-App-User-Id: local-dev' \
+  --data-urlencode "run_id=${run_id}" \
+  --data-urlencode "window_start=${window_start}" \
+  --data-urlencode "window_end=${window_end}" \
+  "${api_base}/v1/meetings/${meeting_id}/analytics/units")
+units_page_two=$(curl --fail --silent --show-error --get \
+  -H 'X-App-User-Id: local-dev' \
+  --data-urlencode "run_id=${run_id}" \
+  --data-urlencode 'limit=1' \
+  --data-urlencode 'offset=1' \
+  "${api_base}/v1/meetings/${meeting_id}/analytics/units")
+
+printf '%s\n%s\n%s\n%s\n' "$overview" "$units" "$window_units" "$units_page_two" | python3 -c '
+import json, sys
+overview, units, window_units, units_page_two = map(json.loads, sys.stdin)
 assert overview["status"] == "succeeded"
 assert overview["coverage"] == 1
 assert len(units) == 2
 assert {unit["label"] for unit in units} == {"positive", "negative"}
+assert len(window_units) == 2
+assert all(unit["run_id"] == overview["run_id"] for unit in window_units)
+assert len(units_page_two) == 1
+assert units_page_two[0]["unit_id"] == units[1]["unit_id"]
 '
 
-echo "PASS: synthetic fixture completed API -> queue -> worker -> analytics API."
+echo "PASS: synthetic fixture completed API -> queue -> worker -> analytics API, timeline evidence filter, and evidence pagination."

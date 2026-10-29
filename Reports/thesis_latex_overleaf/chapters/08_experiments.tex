@@ -1,115 +1,114 @@
-\chapter{Kiểm Chứng Ứng Dụng và Thiết Kế Thực Nghiệm}
+\chapter{Kiểm Chứng Ứng Dụng và Triển Khai Hệ Thống}
 \label{chap:experiments}
 
-Chương này phân biệt hai loại bằng chứng có ý nghĩa khác nhau. \emph{Kiểm chứng ứng dụng} trả lời liệu các thành phần hệ thống có hoạt động cùng nhau theo hợp đồng đã thiết kế hay không. \emph{Đánh giá thực nghiệm} trả lời chất lượng của ASR, model sentiment, độ trễ, khả năng chịu tải hoặc trải nghiệm người dùng. MVP có test code và script phục vụ kiểm chứng integration; chưa có corpus transcript họp được gán nhãn, benchmark model, WER/CER, load test hoặc user study. Vì vậy, chương không công bố F1, AUC, accuracy, SLA hay kết luận về sức khỏe tâm thần.
+Chương này kiểm chứng artefact phần mềm thay vì xây dựng hay đánh giá mô hình học máy. Mục tiêu là xác nhận người dùng có thể đi từ một cuộc họp được phép xử lý đến dashboard có thể truy vết: hệ thống nhận transcript, tạo analysis run, lưu evidence, hiển thị đúng phiên bản xử lý và bàn giao trạng thái vận hành mà không lộ nội dung họp. Phạm vi gồm Google Meet qua Vexa, FastAPI, PostgreSQL, Valkey, worker, Dashboard và Docker Compose. ESP32, firmware, suy luận audio edge, huấn luyện/fine-tuning, gán nhãn corpus, benchmark model, WER/CER và kết luận sức khỏe tâm thần nằm ngoài chương này.
 
-\section{Câu hỏi kiểm chứng và nguyên tắc báo cáo}
-Kiểm chứng hệ thống tập trung vào bốn câu hỏi: (i) transcript có được nhận, lưu và version đúng không; (ii) quality gate/unit builder/adapter có tạo output theo hợp đồng không; (iii) analysis run có đi qua queue--worker--persistence--aggregate không; và (iv) dashboard có nhận được dữ liệu/evidence cập nhật không. Các câu hỏi này phù hợp với đóng góp artefact của khóa luận nhưng không thay thế evaluation một bộ phân loại học máy.
+Vì vậy, thực nghiệm trong chương có nghĩa là kiểm chứng triển khai với fixture tổng hợp và UAT có hướng dẫn. Nó không tạo F1, accuracy, AUC, P95, SLA hay xếp hạng model. Adapter sentiment đang cấu hình chỉ là thành phần tạo output cho pipeline. Coverage, revision, trạng thái run và batch inference duration là trạng thái vận hành của một lần chạy, không là chất lượng dự đoán.
 
-Mỗi lần chạy cần lưu một evidence bundle tối thiểu: commit hoặc image digest; file cấu hình đã redaction; thời điểm chạy; phiên bản container; command/script; exit code; log không chứa transcript thật/secret; application meeting UUID (nếu có); và bản ghi analytics/evidence liên quan. Kết quả ``pass'' chỉ được ghi khi có artifact tương ứng. Một script tồn tại trong repository không được xem là test đã chạy.
+\section{Mục tiêu kiểm chứng và yêu cầu chấp nhận}
+
+Kiểm chứng trả lời năm câu hỏi: (i)~meeting và transcript có được tiếp nhận/lưu đúng revision không; (ii)~analysis run có đi qua API--queue--worker--persistence--aggregate không; (iii)~dashboard có hiển thị dữ liệu của đúng meeting và đúng run không; (iv)~người dùng có nhận ra dữ liệu thiếu, \textit{unknown} và giới hạn diễn giải không; và (v)~người vận hành có bàn giao trạng thái kỹ thuật mà không gửi transcript hoặc secret không. Các câu hỏi này đo khả năng ứng dụng đáp ứng quy trình sử dụng đã chọn; chúng không thay thế evaluation model.
 
 \begin{table}[H]
 \centering
-\caption{Ma trận kiểm chứng và trạng thái bằng chứng của MVP}
-\label{tab:verification-matrix}
-\begin{tabularx}{\linewidth}{p{0.19\linewidth}p{0.28\linewidth}XX}
+\caption{Yêu cầu chấp nhận của MVP hướng ứng dụng và triển khai}
+\label{tab:application-acceptance-requirements}
+\begin{tabularx}{\linewidth}{p{0.13\linewidth}p{0.38\linewidth}X}
 \toprule
-Nhóm & Artefact/test hiện có & Tiêu chí pass & Phạm vi tuyên bố \\ \midrule
-Unit quality/unit builder & \texttt{test\_quality.py}, \texttt{test\_units.py} & Chuẩn hóa tiếng Việt; reject hallucination; ghép unit; bỏ duplicate gần nhau & Logic tiền xử lý, không đo chất lượng ASR/model \\
-Unit service/Vexa parser & \texttt{test\_service.py}, \texttt{test\_vexa.py} & Fallback speaker có kiểm soát; URL Google Meet lỗi bị từ chối; upstream status được giữ & Hợp đồng helper, không chứng minh Vexa E2E \\
-Integration pipeline & \texttt{smoke-analysis-pipeline.sh} & Fixture $\rightarrow$ API $\rightarrow$ queue $\rightarrow$ worker $\rightarrow$ analytics thành công & Luồng nội bộ với dữ liệu tổng hợp \\
-Runtime reachability & \texttt{verify.sh}, \texttt{runtime-status.sh} & Compose hoạt động; \texttt{/ready} và dashboard phản hồi & Readiness/reachability, không phải load test \\
-Vexa/webhook E2E & Kịch bản vận hành được mô tả & Bot, transcript, HMAC, replay và finalize được kiểm tra có log & Cần chạy thực tế với consent; chưa có số liệu báo cáo \\
-Model/ASR/UX/performance & Chưa có dataset/protocol/run hoàn chỉnh & Xem các mục sau của chương & Chưa có kết quả thực nghiệm \\
+ID & Yêu cầu & Tiêu chí pass \\ \midrule
+FR-01 & Mở meeting gần nhất hoặc Application Meeting UUID hợp lệ & Dashboard hiện UUID/trạng thái; UUID sai không trả dữ liệu meeting khác \\
+FR-02 & Output luôn gắn với một analysis run & Hiển thị/chọn được run ID, revision, model/adapter và preprocessing version \\
+FR-03 & Không diễn giải dữ liệu thiếu thành neutral & Hiển thị predicted/accepted/total, coverage, \textit{unknown} và quality reason \\
+FR-04 & Aggregate có thể đối chiếu với nguồn & Timeline, speaker aggregate và evidence dùng cùng run được chọn \\
+FR-05 & Bàn giao trạng thái không lộ nội dung họp & Tóm tắt chỉ có UUID, version, revision, coverage và duration \\
+OR-01 & Stack chạy lại được ở DEV/UAT & Compose, \texttt{/ready} và dashboard phản hồi trên loopback \\
+OR-02 & Có evidence tái kiểm tra được & Script UAT có exit code/log; ảnh và bundle đã redaction \\
+OR-03 & Chưa public khi thiếu kiểm soát production & Loopback, TLS, authentication/authorization, backup và retention được phân biệt rõ \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Kiểm thử mức đơn vị và hợp đồng}
-Ở lần kiểm chứng cục bộ ngày 28/09/2026, lệnh \texttt{uv run pytest -q} hoàn tất 11/11 test case. Nhóm quality kiểm tra NFC/whitespace vẫn giữ dấu tiếng Việt, mẫu hallucination kiểu ``subscribe'' bị từ chối và dấu hiệu tiếng Việt có thể ưu tiên hơn language label upstream sai. Nhóm unit builder kiểm tra ghép ba final segment liền kề của cùng speaker, giữ segment bị từ chối như evidence không inferable và bỏ duplicate final segment phát gần nhau. Nhóm service kiểm tra chỉ dùng fallback speaker khi provider chưa gán speaker; nhóm Vexa parser kiểm tra URL Markdown không hợp lệ và bảo toàn status code lỗi upstream.
+Một lần pass chỉ được ghi nhận khi có artifact tương ứng. Evidence bundle tối thiểu có commit hoặc image digest, thời điểm chạy, phiên bản container, command/script, exit code, log đã redaction, Application Meeting UUID nếu được phép lưu cục bộ, và response analytics không chứa transcript. Một script tồn tại trong repository không phải bằng chứng script đã chạy.
 
-Các test này nên chạy trong môi trường backend khóa dependency, ví dụ \texttt{uv run pytest}, và log kết quả phải được lưu vào evidence bundle. Chúng kiểm tra invariant của code; không dùng transcript thật, không gọi Vexa và không cho biết một model nhận nhãn sentiment đúng bao nhiêu lần. Khi thêm model adapter, test contract cần bổ sung input tiếng Việt/ngoài ngôn ngữ, shape của probability, label mapping, failure mode khi artifact không tải được và tính nhất quán giữa \texttt{model\_version} cấu hình với version thực tế.
+\section{Thiết kế kiểm chứng theo tầng}
 
-\section{Kiểm chứng integration và vận hành}
-\subsection{Smoke pipeline tổng hợp}
-Script \texttt{smoke-analysis-pipeline.sh} tạo một meeting fixture với hai final segment tiếng Việt tổng hợp: một chứa marker tích cực và một chứa marker tiêu cực. Script tạo final analysis run qua API, chờ worker hoàn tất, đọc overview và units, rồi kiểm tra status \texttt{succeeded}, coverage bằng $1$, có đúng hai unit và tập nhãn \{\textit{positive}, \textit{negative}\}. Tất cả row phụ thuộc được xóa qua khóa UUID fixture khi script kết thúc, kể cả khi lỗi.
+\subsection{Kiểm thử hợp đồng và pipeline tổng hợp}
 
-Smoke test này là kiểm chứng tốt cho đường đi application-owned API--PostgreSQL--Valkey Stream--worker--analytics API và cho runtime \texttt{baseline-rules-v2}. Tuy nhiên, fixture được chọn để khớp luật baseline, nên kết quả không được dùng làm accuracy/F1, không đại diện cho ngôn ngữ họp và không chứng minh PhoBERT hoặc custom model. Script cũng không thay thế test SSE browser, benchmark đồng thời, resilience khi process chết hoặc Vexa transcript thực.
+Các test đơn vị bao phủ quality gate, unit builder, service/Vexa parser và metric của analysis run. Chúng kiểm tra invariant như chuẩn hóa tiếng Việt, loại hallucinatory text, ghép unit, khử duplicate gần nhau, fallback speaker có kiểm soát, URL Google Meet không hợp lệ và phép tính coverage không chia cho không. Lệnh \texttt{uv run pytest -q} chỉ kết luận invariant mã nguồn pass sau khi output thực tế được capture vào evidence bundle; nó không đo cảm xúc của con người.
 
-\subsection{Readiness, dashboard và contract nguồn}
-\texttt{verify.sh} kiểm tra trạng thái Compose, endpoint \texttt{/ready} của backend và HTML dashboard trên loopback. \texttt{runtime-status.sh} tạo audit read-only về container/port/readiness nhưng không in \texttt{settings.env}, transcript hay biến môi trường container. Các script này nên chạy trước demo và sau thay đổi hạ tầng; output pass chỉ chứng minh service reachable tại thời điểm chạy.
+Script \texttt{smoke-analysis-pipeline.sh} tạo meeting fixture tổng hợp, gửi final analysis qua API, chờ worker, kiểm tra analytics API rồi xóa toàn bộ row phụ thuộc theo UUID fixture. Đường đi được kiểm chứng là API $\rightarrow$ PostgreSQL $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ persistence/aggregate $\rightarrow$ analytics API. Fixture có output xác định, nên không được dùng làm accuracy hay so sánh adapter.
 
-Kịch bản contract Vexa cần kiểm tra độc lập: spawn bot đúng meeting/owner, đọc transcript, stop bot, webhook có chữ ký hợp lệ, webhook chữ ký sai, timestamp hết hạn, event ID trùng, retry reconcile và finalize. Mỗi trường hợp phải nêu input, response HTTP kỳ vọng, row database/event dự kiến và cách cleanup. Không dùng transcript cuộc họp thật trong Git, fixture hay CI log; E2E thật chỉ được thực hiện sau khi participant consent và endpoint HTTPS của webhook đã sẵn sàng.
+\subsection{Readiness và triển khai container}
 
-\section{Protocol đánh giá model sentiment}
-\subsection{Dữ liệu, nhãn và split}
-Để đánh giá một model sentiment, cần corpus transcript họp đúng task với guideline ba lớp, trường hợp \textit{unknown} và quy tắc cho phủ định, mỉa mai, code-switching, thiếu ngữ cảnh và trích dẫn lời người khác. Ít nhất hai annotator độc lập nên gán nhãn trước adjudication; agreement cần được báo cáo bằng Cohen's kappa hoặc Krippendorff's alpha cùng phân bố nhãn. Agreement không thay thế chất lượng model, nhưng là bằng chứng về độ tin cậy của nhãn tham chiếu \cite{artstein2008}.
+\texttt{verify.sh} kiểm trạng thái Compose, \texttt{/ready} của backend và HTML dashboard. \texttt{runtime-status.sh} tạo audit read-only về service, port và readiness nhưng không in \texttt{settings.env}, transcript hay biến môi trường container. Hai script chứng minh service reachable tại một thời điểm; chúng không phải load test hoặc SLA.
 
-Train/validation/test phải split theo \textbf{meeting}, không split ngẫu nhiên theo segment, để tránh speaker/topic/context leakage. Test set được khóa trước tuning. Dataset manifest ghi nguồn, consent/license, số meeting/speaker/unit, tiêu chí quality gate, date range, hash, preprocessing, label guideline và lý do loại dữ liệu. Không đưa dữ liệu ngoài domain hoặc notebook phân loại trầm cảm nhị phân vào cùng bảng kết quả với sentiment transcript.
+Deployment chỉ dùng một entry point là \texttt{source/compose.yaml}. Backend và worker dùng PostgreSQL/Valkey application-owned; dashboard static đi qua Nginx reverse proxy cùng origin \texttt{/api/}. Một container có trạng thái \emph{running} chưa đủ để kết luận thành công: readiness và pipeline synthetic phải cùng pass. Cổng dashboard/backend bind loopback cho demo nội bộ; không public PostgreSQL, Valkey, Vexa admin API hoặc Docker socket.
 
-\subsection{Metric, uncertainty và so sánh model}
-Với lớp $c$, precision, recall và F1 được xác định:
-\begin{equation}
-P_c=\frac{TP_c}{TP_c+FP_c},\qquad R_c=\frac{TP_c}{TP_c+FN_c},\qquad F1_c=\frac{2P_cR_c}{P_c+R_c}.
-\end{equation}
-Macro-F1 là trung bình không trọng số của $F1_c$ trên các lớp sentiment, vì vậy không để lớp neutral chiếm đa số che khuất lỗi ở positive/negative. Báo cáo đầy đủ gồm confusion matrix, precision/recall/F1 theo lớp, coverage, tỷ lệ \textit{unknown}, calibration, latency P50/P95, phần cứng, batch size, seed và error analysis theo các lát dữ liệu đã định trước.
+\subsection{UAT dashboard và tiện ích bàn giao}
 
-Khi so sánh model, dùng cùng test set, quality gate, language routing, preprocessing policy và hardware. Confidence interval có thể được ước lượng bằng bootstrap với đơn vị resample là meeting, không phải segment, để tôn trọng cấu trúc phụ thuộc của dữ liệu \cite{efron1979}. Nếu tuyên bố model A tốt hơn B, cần nêu giả thuyết, phép kiểm định/interval, đơn vị phân tích và số lần thử; kiểm định ý nghĩa trong NLP phải phù hợp metric và thiết kế thực nghiệm \cite{dror2018}.
+Dashboard giúp người dùng đọc output có ngữ cảnh chứ không ra quyết định tự động. Trước KPI, người dùng xác nhận Application Meeting UUID, trạng thái meeting, analysis run, revision và version. Overview hiển thị số unit predicted/accepted/total cùng prediction coverage/effective coverage; do đó \textit{unknown} hoặc unit bị quality gate loại không bị gộp ngầm vào neutral. Timeline, tổng hợp theo speaker và evidence được tải lại từ REST sau tín hiệu SSE, và đều thuộc run đang chọn.
+
+Dashboard có tiện ích \emph{Tóm tắt bàn giao đã lược bỏ transcript}. Nút sao chép tạo text gồm meeting UUID, run ID/trạng thái, version, revision, coverage và batch inference duration. Transcript, evidence nguyên văn, tên speaker và secret bị loại khỏi tóm tắt. Tiện ích phục vụ báo trạng thái demo/UAT hoặc bàn giao cho người hỗ trợ mà không gửi dữ liệu họp.
+
+Script \texttt{dashboard-acceptance.sh} bổ sung kiểm tra read-only. Không có đối số, script xác nhận deployment reachable. Khi nhận Application Meeting UUID, script chỉ chấp nhận analysis run mới nhất có trạng thái \texttt{succeeded}, kiểm trường bắt buộc cho dashboard và in tóm tắt không có transcript. Script không gọi endpoint transcript/evidence và không in secret.
 
 \begin{table}[H]
 \centering
-\caption{Mẫu báo cáo so sánh model sentiment (chỉ điền sau run có thể tái lập)}
-\label{tab:model-comparison-template}
-\begin{tabularx}{\linewidth}{p{0.23\linewidth}p{0.22\linewidth}XXX}
+\caption{Ma trận kiểm chứng ứng dụng của MVP}
+\label{tab:application-verification-matrix}
+\begin{tabularx}{\linewidth}{p{0.18\linewidth}p{0.28\linewidth}XX}
 \toprule
-Model/artifact & Dataset/test version & Macro-F1 [CI] & Coverage & P95 inference \\ \midrule
-TF--IDF + Logistic Regression & & & & \\
-PhoBERT-base fine-tune & & & & \\
-PhoBERT-large fine-tune & & & & \\
-Custom model (nếu có) & & & & \\
+Nhóm & Artefact & Tiêu chí pass & Phạm vi tuyên bố \\ \midrule
+Hợp đồng mã nguồn & Các test quality, units, service và Vexa & Invariant input, quality, parser và metric đúng & Không đo chất lượng sentiment/ASR \\
+Pipeline nội bộ & \texttt{smoke-analysis-pipeline.sh} & Fixture đi qua API, queue, worker và analytics; cleanup & Luồng application-owned với dữ liệu tổng hợp \\
+Runtime & \texttt{verify.sh}, \texttt{runtime-status.sh} & Compose, \texttt{/ready} và dashboard reachable & Reachability tại thời điểm kiểm tra \\
+Dashboard UAT & Checklist UI; \texttt{dashboard-acceptance.sh} & Đúng run/revision/coverage; handoff redacted & Kiểm chứng theo task, không là user study \\
+Vexa E2E & Checklist consent và webhook & Bot, final transcript, HMAC/replay, dashboard & Sau consent và endpoint HTTPS \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Đánh giá ASR, hệ thống và trải nghiệm người dùng}
-\subsection{ASR và transcript}
-WER/CER cần audio gốc và transcript reference được chuẩn bị độc lập. Báo cáo phải cố định quy tắc tokenization tiếng Việt, điều kiện audio, loại meeting, noise/echo, speech overlap, code-switching và cách xử lý tên riêng. WER/CER là metric của ASR, không thể dùng thay F1 sentiment; ngược lại, F1 sentiment không cho biết transcript đã được nhận dạng chính xác bao nhiêu. MVP chưa có bộ dữ liệu này nên không báo cáo WER/CER.
+\section{Quy trình thực hiện và checkpoint}
 
-\subsection{Hiệu năng và resilience hệ thống}
-Khi đo hệ thống, cần ghi workload generator, số meeting/segment, phân bố kích thước text, concurrency, thời gian chạy, phần cứng/container image và cách warm-up. Độ trễ được tách:
-\begin{equation}
-T_{e2e}=T_{capture}+T_{ingest}+T_{queue}+T_{analysis}+T_{delivery}.
-\end{equation}
-Metric tối thiểu gồm throughput, queue lag, success/failure/retry rate, P50/P95/P99 latency, resource profile và thời gian recovery sau khi restart backend/worker. Fault injection cần bao gồm Valkey unavailable, backend/worker restart, webhook duplicate/tampered/replay và transcript revision muộn. Không ghi SLA hay ``real time'' định lượng nếu chưa có workload và log đo tương ứng.
+Quy trình sau là thứ tự bắt buộc để thực hiện demo hoặc UAT. Một checkpoint fail phải được xử lý trước checkpoint tiếp theo; không thay bằng claim về model.
 
-\subsection{UX và cách diễn giải}
-UX study nên kiểm tra người dùng có tìm được evidence, nhận ra \textit{unknown}/coverage thấp, phân biệt polarity transcript với đánh giá con người và hiểu model/revision hay không. Nhiệm vụ, participant criteria, consent, prototype/version, task completion, SUS/NASA-TLX và limitation phải được công bố. Không thiết kế UX study để suy luận ai có trầm cảm hoặc yêu cầu participant đưa ra quyết định nhân sự từ dashboard.
+\begin{enumerate}[label=\textbf{B\arabic*.}, leftmargin=1.4cm]
+  \item \textbf{Chuẩn bị cấu hình.} Trong \texttt{source/}, chạy \texttt{./scripts/bootstrap.sh}, đặt quyền \texttt{chmod 600 settings.env}, điền secret cục bộ và kiểm \texttt{docker compose --env-file settings.env config --quiet}. Không commit secret, raw transcript hoặc token.
+  \item \textbf{Dựng hạ tầng.} Chạy \texttt{docker compose --env-file settings.env up -d --build}, rồi chạy \texttt{./scripts/runtime-status.sh} và \texttt{./scripts/verify.sh}. Pass khi API \texttt{/ready} và dashboard trả HTTP 200, PostgreSQL/Valkey healthy.
+  \item \textbf{Kiểm pipeline không dùng dữ liệu thật.} Chạy \texttt{./scripts/smoke-analysis-pipeline.sh}. Pass khi script in thông báo \texttt{PASS}; fixture phải tự cleanup. Chỉ sau bước này mới chạy E2E có consent.
+  \item \textbf{Thu nhận transcript có consent.} Tạo Google Meet test, nhận consent, spawn/admit bot và sync transcript. Chỉ tạo final analysis sau khi API có segment \texttt{is\_final=true}. Không lưu transcript thật vào Git hoặc evidence log.
+  \item \textbf{Nghiệm thu cùng người dùng.} Mở dashboard trên loopback, nhập Application Meeting UUID nếu cần, xác nhận run/revision trước KPI, kiểm coverage/\textit{unknown}, timeline, evidence và SSE. Bấm sao chép tóm tắt, dán vào text editor và xác nhận không có transcript, speaker, token hay password.
+  \item \textbf{Ghi evidence UAT.} Chạy \texttt{dashboard-acceptance.sh} với Application Meeting UUID. Pass khi script xác nhận dashboard acceptance data hoàn chỉnh. Lưu exit code, timestamp, commit/image digest và ảnh đã redaction; không đưa UUID thật hoặc output raw vào repository.
+\end{enumerate}
 
-\section{Biên bản bằng chứng cho một lần kiểm chứng integration}
-Mục này không phải là bảng kết quả sentiment. Nó là ``biên bản truy xuất'' cho một lần chạy integration, nhằm trả lời câu hỏi: kết luận ``pipeline hoạt động'' dựa trên lần chạy nào, ở phiên bản mã nào và có thể kiểm tra lại bằng artifact nào. Một run integration chỉ chứng minh luồng nội bộ API--PostgreSQL--Valkey--worker--analytics hoạt động với input đã nêu; nó không chứng minh Accuracy, Macro-F1, WER ASR hoặc SLA.
+Hướng dẫn thao tác chi tiết, biến môi trường và xử lý lỗi Vexa/transcription được giữ trong \url{docs/operations/DEV_INSTALL_RUN_TEST_DASHBOARD_GUIDE.md}. Yêu cầu chấp nhận, vai trò người dùng và checklist UAT được cụ thể hóa trong \url{docs/operations/APPLICATION_DASHBOARD_DEPLOYMENT_PLAN.md}.
 
-Mỗi run có một Evidence ID duy nhất, ví dụ \texttt{EVID-20260928-INT01}. Evidence bundle được lưu cục bộ trong \texttt{source/evidence/runs/<Evidence ID>/}; cấu trúc, cách redaction và script tạo bundle được mô tả trong \texttt{source/evidence/README.md}. Quy trình ghi nhận gồm bốn bước: (i) chạy script kiểm chứng; (ii) kiểm tra exit code và log; (iii) điền manifest bằng thông tin môi trường thực tế; và (iv) chỉ trích dẫn Evidence ID trong luận văn khi bundle có đầy đủ artifact. Nếu integration chưa chạy, phải ghi rõ ``chưa đo'' và không điền số liệu.
+\section{Kịch bản lỗi và giới hạn triển khai}
+
+Kịch bản vận hành phải gồm backend/worker restart, Valkey unavailable, webhook chữ ký sai/timestamp hết hạn/event ID trùng, transcript revision muộn và dashboard mất kết nối SSE. Mỗi kịch bản ghi input, HTTP status kỳ vọng, database/outbox state, cách recovery, bằng chứng pass/fail và cleanup. Với lỗi Vexa hoặc transcription, dashboard chỉ hiển thị trạng thái/lỗi có thể hành động; không được suy đoán nội dung cuộc họp đã nhận đủ.
+
+Một UAT chưa là user study. Nếu sau này đo trải nghiệm người dùng, protocol phải có participant criteria, consent, task, phiên bản dashboard, tiêu chí completion và kế hoạch xử lý phản hồi. Không dùng dashboard để suy luận trầm cảm, năng lực, hiệu suất hay quyết định nhân sự. Coverage cũng không chứng minh transcript đúng hoặc output sentiment đúng; đánh giá ASR/model chỉ thuộc một đề tài khác có dataset hợp pháp và protocol riêng.
+
+\section{Biên bản bằng chứng và điều kiện kết luận}
+
+Mỗi run kiểm chứng có Evidence ID duy nhất, ví dụ \texttt{EVID-20261026-UAT01}. Bundle cục bộ tại \path{source/evidence/runs/<Evidence-ID>/} gồm command, exit code, stdout/stderr, environment redaction-safe, manifest và ảnh UAT đã che dữ liệu. Có thể dùng \texttt{capture-evidence.sh} cho unit/integration; UAT dashboard ghi bổ sung output \texttt{dashboard-acceptance.sh}. Nếu không có bundle đầy đủ, báo cáo phải ghi \emph{chưa đo} thay vì điền kết quả.
 
 \begin{table}[H]
 \centering
-\caption{Nội dung cần ghi trong evidence bundle của một run integration}
-\label{tab:mvp-results-template}
-\begin{tabularx}{\linewidth}{p{0.30\linewidth}p{0.33\linewidth}X}
+\caption{Nội dung tối thiểu của evidence bundle kiểm chứng ứng dụng}
+\label{tab:application-evidence-bundle}
+\begin{tabularx}{\linewidth}{p{0.29\linewidth}p{0.38\linewidth}X}
 \toprule
-Trường evidence & Nội dung cần ghi & Nguồn trong bundle \\ \midrule
-Định danh run & Evidence ID, ngày/giờ ICT, người chạy, kết quả PASS/FAIL & \texttt{manifest.md} \\
-Phiên bản/môi trường & Git commit, OS, CPU/RAM, Docker/Compose, image digest nếu có & \texttt{environment.txt}, \texttt{manifest.md} \\
-Lệnh và kết quả & Command đầy đủ, exit code, stdout/stderr & \texttt{commands.txt}, \texttt{exit-code.txt}, \texttt{stdout.log} \\
-Dữ liệu và quyền riêng tư & Fixture ID đã redaction; synthetic hay real-consented; consent/retention áp dụng & \texttt{manifest.md} \\
-Vòng đời pipeline & Transcript revision, analysis run status, accepted/rejected unit và lý do & API result đã redaction hoặc \texttt{stdout.log} \\
-Coverage/version & Acceptance, prediction, effective coverage; \texttt{model\_version}, \texttt{preprocessing\_version} & Analytics API đã redaction, \texttt{manifest.md} \\
-Kiểm tra UI/SSE & KPI, timeline, evidence, event SSE hoặc lý do chưa kiểm tra & Screenshot/API result đã redaction \\
-Giới hạn/failure & Điều kiện bất thường, retry, điểm chưa đo và phạm vi claim được phép nêu & \texttt{manifest.md} \\
+Trường & Nội dung & Nguồn \\ \midrule
+Định danh & Evidence ID, thời gian ICT, người chạy, PASS/FAIL & \texttt{manifest.md} \\
+Phiên bản/môi trường & Git commit, Docker/Compose, image digest nếu có, OS/CPU & \texttt{environment.txt} \\
+Lệnh/kết quả & Command đầy đủ, exit code, stdout/stderr & \texttt{commands.txt}, \texttt{exit-code.txt}, \texttt{stdout.log} \\
+Dữ liệu/quyền riêng tư & Fixture synthetic hoặc consent áp dụng; redaction đã thực hiện & \texttt{manifest.md} \\
+Truy vết dashboard & Run ID, version, preprocessing, revision, coverage, batch duration & API result đã redaction hoặc output UAT \\
+Kiểm UI & UUID/run đúng, evidence/timeline, SSE hoặc lý do chưa kiểm & Ảnh đã redaction và checklist \\
+Giới hạn/failure & Điểm fail, recovery, claim được phép nêu & \texttt{manifest.md} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Ví dụ, Evidence ID của unit test chỉ được dùng để kết luận các invariant code đã pass; nó không thay thế Evidence ID integration. Sau khi có một bundle integration PASS, bảng kết quả ở phần sau hoặc phụ lục nên trích Evidence ID và tóm tắt số run/pass/fail, thay vì chép toàn bộ log vào luận văn.
-
-\section{Giới hạn thực nghiệm hiện tại}
-Rule baseline chỉ chứng minh integration khi smoke test pass; nó không thay thế model đã huấn luyện. Các notebook phân loại trầm cảm nhị phân ngoài domain họp không được ngoại suy sang sentiment transcript do khác task, nhãn, dữ liệu và nguy cơ leakage. Chưa có số liệu coverage, accuracy, F1, WER, latency percentile, load, calibration hoặc UX được báo cáo như kết quả của khóa luận. Các transcript ngắn, multilingual, bị sửa hoặc không đủ điều kiện tiếp tục được biểu diễn là \textit{unknown}/rejected cùng lý do, thay vì bị diễn giải quá mức.
+Khi B1--B3 pass, kết luận được phép nêu là deployment nội bộ và pipeline synthetic hoạt động theo hợp đồng đã mô tả. Khi B4--B6 có consent và evidence đầy đủ, có thể nêu thêm rằng một luồng người dùng Google Meet đã đi đến dashboard truy vết được trên môi trường đã ghi nhận. Không suy rộng kết luận thành chất lượng ASR/model, hiệu năng tải, SLA, khả năng đa nền tảng hay đánh giá con người.

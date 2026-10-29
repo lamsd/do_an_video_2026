@@ -126,6 +126,9 @@ transcription_service_token=$(config_value TRANSCRIPTION_SERVICE_TOKEN)
 gateway_port=$(config_value API_GATEWAY_HOST_PORT)
 admin_port=$(config_value ADMIN_API_PORT)
 admin_token=$(config_value ADMIN_TOKEN)
+browser_image=$(config_value BROWSER_IMAGE)
+image_tag=$(config_value IMAGE_TAG)
+browser_image=${browser_image:-"vexaai/vexa-bot:${image_tag:-v012}"}
 
 required='DB_PASSWORD MINIO_ACCESS_KEY MINIO_SECRET_KEY ADMIN_TOKEN INTERNAL_API_SECRET'
 for key in $required; do
@@ -173,7 +176,12 @@ case "$action" in
       echo "Expected /agent/health to be absent (404), got $status." >&2
       exit 1
     fi
-    echo "Verified: Vexa meetings-only gateway is healthy."
+    if ! docker image inspect "$browser_image" >/dev/null 2>&1; then
+      echo "Missing Vexa bot runner image: $browser_image" >&2
+      echo "Download it with: docker pull $browser_image" >&2
+      exit 1
+    fi
+    echo "Verified: Vexa meetings-only gateway and bot runner image are ready."
     ;;
   mint-token)
     admin_port=${admin_port:-18157}

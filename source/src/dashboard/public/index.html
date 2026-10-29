@@ -3,38 +3,223 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Meeting Intelligence Dashboard</title>
+    <meta name="theme-color" content="#0b1220" />
+    <title>Meeting Intelligence · Experiment Dashboard</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header><h1>Meeting Intelligence</h1><p>Phân tích sắc thái transcript có bằng chứng</p></header>
-    <main>
-      <form id="meeting-form">
-        <label>Application Meeting UUID <input id="meeting-id" placeholder="Tự chọn meeting mới nhất; chỉ nhập khi muốn mở meeting cũ" /></label>
-        <button type="submit">Mở dashboard</button>
-        <button id="run-final" type="button">Chạy phân tích cuối</button>
-      </form>
-      <p id="status" role="status">Đang tìm meeting mới nhất…</p>
-      <p id="active-meeting" class="active-meeting" hidden></p>
-      <section id="metrics" class="cards" hidden></section>
-      <section id="speaker-section" hidden>
-        <h2>Phân tích theo người nói</h2>
-        <p>Điểm và tỷ lệ được tính độc lập cho từng speaker từ transcript final.</p>
+    <a class="skip-link" href="#dashboard-content">Đi tới nội dung chính</a>
+    <header class="site-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">MI</span>
+        <div>
+          <p class="eyebrow">Meeting Intelligence</p>
+          <h1>Experiment dashboard</h1>
+        </div>
+      </div>
+      <p class="scope-badge">Phân tích sắc thái transcript · không dùng để đánh giá con người</p>
+    </header>
+
+    <main id="dashboard-content">
+      <section class="control-panel" aria-label="Chọn phiên họp và lần chạy">
+        <form id="meeting-form">
+          <label class="field field-wide" for="meeting-id">
+            <span>Application Meeting UUID</span>
+            <input id="meeting-id" autocomplete="off" placeholder="Để trống để mở meeting gần nhất" />
+          </label>
+          <button type="submit">Mở meeting</button>
+          <button id="refresh-dashboard" class="button-secondary" type="button" disabled>Làm mới dữ liệu</button>
+          <button id="run-final" class="button-secondary" type="button">Chạy model đang cấu hình</button>
+        </form>
+        <form id="start-meeting-form" class="start-meeting-form" aria-describedby="start-meeting-help">
+          <div class="start-meeting-heading">
+            <p class="eyebrow">Bắt đầu cuộc họp mới</p>
+            <p id="start-meeting-help">Dán Google Meet URL để gửi yêu cầu bot tham gia. Host cần duyệt bot trước khi có transcript.</p>
+          </div>
+          <label class="field field-wide" for="meet-url">
+            <span>Google Meet URL</span>
+            <input id="meet-url" type="url" inputmode="url" autocomplete="off" placeholder="https://meet.google.com/abc-defg-hij" />
+          </label>
+          <label class="field" for="bot-name">
+            <span>Tên bot</span>
+            <input id="bot-name" maxlength="128" value="Meeting Assistant" />
+          </label>
+          <label class="consent-field" for="meeting-consent">
+            <input id="meeting-consent" type="checkbox" />
+            <span>Tôi xác nhận người tham gia đã đồng ý và host sẽ duyệt bot.</span>
+          </label>
+          <button id="start-meeting" class="button-secondary" type="submit" disabled>Yêu cầu bot tham gia</button>
+          <p id="start-meeting-status" class="start-meeting-status" role="status" aria-live="polite"></p>
+        </form>
+        <div class="run-picker">
+          <label class="field" for="run-select">
+            <span>Lần chạy đang xem</span>
+            <select id="run-select" disabled><option>Chưa có analysis run</option></select>
+          </label>
+          <p id="active-meeting" class="active-meeting" hidden></p>
+        </div>
+        <p id="status" class="status" role="status">Đang tìm meeting gần nhất…</p>
+        <p id="last-updated" class="last-updated" aria-live="polite"></p>
+        <aside id="handoff-summary" class="handoff-summary" hidden aria-labelledby="handoff-heading">
+          <div>
+            <p class="eyebrow">Tiện ích vận hành</p>
+            <h2 id="handoff-heading">Tóm tắt bàn giao đã lược bỏ transcript</h2>
+            <p>Chỉ gồm định danh meeting/run, phiên bản xử lý và coverage để hỗ trợ demo hoặc UAT; không chứa transcript, evidence hay secret.</p>
+          </div>
+          <div class="handoff-actions">
+            <button id="copy-handoff" class="button-secondary" type="button">Sao chép tóm tắt</button>
+            <p id="handoff-copy-status" class="handoff-copy-status" aria-live="polite"></p>
+          </div>
+          <pre id="handoff-preview" class="handoff-preview"></pre>
+        </aside>
+      </section>
+
+      <section id="operator-section" class="panel-section" aria-labelledby="operator-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Vận hành cục bộ</p>
+            <h2 id="operator-heading">Cấu hình, model và tích hợp</h2>
+          </div>
+          <button id="refresh-operator" class="button-secondary" type="button">Làm mới trạng thái</button>
+        </div>
+        <p class="section-intro">Dashboard chỉ hiển thị trạng thái an toàn. API key, webhook secret, URL nội bộ và đường dẫn artifact không bao giờ được hiển thị hoặc gửi qua trình duyệt.</p>
+        <p id="operator-status" class="operator-status" role="status">Đang kiểm tra cấu hình vận hành…</p>
+        <section class="operator-runbook" aria-labelledby="operator-runbook-heading">
+          <div>
+            <p class="eyebrow">Luồng thiết lập</p>
+            <h3 id="operator-runbook-heading" class="operator-subheading">Chạy theo thứ tự này</h3>
+          </div>
+          <ol id="operator-setup-steps" class="operator-setup-steps"></ol>
+        </section>
+        <form id="local-setup-form" class="local-setup-form" aria-describedby="local-setup-help">
+          <div class="local-setup-heading">
+            <p class="eyebrow">Thiết lập tại Dashboard</p>
+            <h3 class="operator-subheading">Lưu &amp; chạy cục bộ</h3>
+            <p id="local-setup-help">Submit chỉ hoạt động ở development trên máy local. API key được gửi một lần tới backend nội bộ, không được hiển thị lại; Hủy chỉ bỏ dữ liệu chưa submit.</p>
+          </div>
+          <label class="field field-wide" for="setup-vexa-key">
+            <span>Vexa API key mới <small>(không bắt buộc nếu không đổi)</small></span>
+            <input id="setup-vexa-key" type="password" autocomplete="off" spellcheck="false" placeholder="Dán key replacement, không dùng key đã lộ" />
+          </label>
+          <label class="field" for="setup-adapter">
+            <span>Classifier adapter</span>
+            <select id="setup-adapter"><option value="rules">rules</option><option value="tfidf-logreg">tfidf-logreg</option></select>
+          </label>
+          <label class="field" for="setup-model-version">
+            <span>Model version</span>
+            <input id="setup-model-version" maxlength="128" required />
+          </label>
+          <label class="field" for="setup-preprocessing-version">
+            <span>Preprocessing version</span>
+            <input id="setup-preprocessing-version" maxlength="128" required />
+          </label>
+          <label class="field" for="setup-threshold">
+            <span>Confidence threshold</span>
+            <input id="setup-threshold" type="number" min="0" max="1" step="0.01" required />
+          </label>
+          <div id="setup-artifact-fields" class="setup-artifact-fields" hidden>
+            <label class="field field-wide" for="setup-artifact-dir">
+              <span>Artifact directory</span>
+              <input id="setup-artifact-dir" autocomplete="off" placeholder="/models/my-model" />
+            </label>
+            <label class="field field-wide" for="setup-artifact-sha256">
+              <span>Artifact SHA-256</span>
+              <input id="setup-artifact-sha256" autocomplete="off" spellcheck="false" maxlength="64" placeholder="64 ký tự hexadecimal" />
+            </label>
+          </div>
+          <label class="consent-field local-setup-consent" for="setup-confirm">
+            <input id="setup-confirm" type="checkbox" />
+            <span>Tôi xác nhận đây là Dashboard local, đồng ý lưu cấu hình và build/recreate backend, worker, dashboard.</span>
+          </label>
+          <div class="local-setup-actions">
+            <button id="submit-local-setup" type="submit" disabled>Lưu &amp; chạy</button>
+            <button id="cancel-local-setup" class="button-secondary" type="button">Hủy</button>
+          </div>
+          <p id="local-setup-status" class="local-setup-status" role="status" aria-live="polite"></p>
+        </form>
+        <div id="operator-summary" class="cards" aria-live="polite"></div>
+        <div class="operator-actions" aria-label="Lệnh cấu hình cục bộ">
+          <button id="copy-operator-setup" class="button-secondary" type="button">Sao chép toàn bộ runbook</button>
+          <button id="copy-operator-apply" class="button-secondary" type="button">Sao chép lệnh build &amp; restart</button>
+          <p id="operator-copy-status" class="operator-copy-status" aria-live="polite"></p>
+        </div>
+        <pre id="operator-command-preview" class="operator-command-preview">cd source &amp;&amp; ./scripts/runtime-settings.sh wizard
+# Sau khi chỉ đổi settings.env: ./scripts/runtime-settings.sh apply</pre>
+        <div>
+          <h3 class="operator-subheading">Tích hợp đã đăng ký</h3>
+          <div id="operator-integrations" class="operator-integrations"></div>
+        </div>
+      </section>
+
+      <section id="empty-state" class="empty-state" hidden>
+        <h2>Chưa có kết quả để hiển thị</h2>
+        <p>Tạo meeting, chờ transcript final, rồi chạy analysis. Dashboard sẽ luôn nêu rõ model, revision và coverage.</p>
+      </section>
+
+      <section id="overview-section" hidden aria-labelledby="overview-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Lần chạy có truy vết</p>
+            <h2 id="overview-heading">Tổng quan</h2>
+          </div>
+          <div id="run-meta" class="run-meta"></div>
+        </div>
+        <div id="metrics" class="cards"></div>
+        <p id="coverage-note" class="coverage-note"></p>
+      </section>
+
+      <section id="comparison-section" class="panel-section" hidden aria-labelledby="comparison-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">So sánh vận hành</p>
+            <h2 id="comparison-heading">Các model đã chạy</h2>
+          </div>
+        </div>
+        <p class="section-intro">Bảng này so sánh cùng meeting theo run/version; không phải Macro-F1 hay kết luận model nào chính xác hơn.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Model / run</th><th>Revision</th><th>Trạng thái</th><th>Unit dự đoán</th><th>Effective coverage</th><th>Batch inference</th></tr></thead>
+          <tbody id="comparison-body"></tbody>
+        </table></div>
+      </section>
+
+      <section id="timeline-section" class="panel-section" hidden aria-labelledby="timeline-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">Theo thời gian</p><h2 id="timeline-heading">Sắc thái trong cuộc họp</h2></div>
+          <div class="legend" aria-label="Chú giải"><span><i class="dot positive"></i>Tích cực</span><span><i class="dot neutral"></i>Trung tính</span><span><i class="dot negative"></i>Tiêu cực</span></div>
+        </div>
+        <div id="timeline" class="timeline" aria-label="Các cửa sổ sentiment"></div>
+        <div class="timeline-selection">
+          <p id="timeline-selection" class="section-intro">Chọn một cột để chỉ xem evidence thuộc phút đó.</p>
+          <button id="clear-window" class="button-secondary" type="button" hidden>Hiện tất cả evidence</button>
+        </div>
+      </section>
+
+      <section id="speaker-section" class="panel-section" hidden aria-labelledby="speaker-heading">
+        <div class="section-heading"><div><p class="eyebrow">Theo người nói</p><h2 id="speaker-heading">Tổng hợp có ngữ cảnh</h2></div></div>
+        <p class="section-intro">Các tỷ lệ chỉ mô tả transcript được model xử lý trong run đã chọn; không phải đánh giá người nói.</p>
         <div id="speaker-metrics" class="speaker-cards"></div>
       </section>
-      <section id="timeline-section" hidden>
-        <h2>Sắc thái toàn cuộc họp theo thời gian</h2><div id="timeline" class="timeline"></div>
+
+      <section id="evidence-section" class="panel-section" hidden aria-labelledby="evidence-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">Audit trail</p><h2 id="evidence-heading">Evidence theo đơn vị phân tích</h2></div>
+          <div class="evidence-filters">
+            <label for="evidence-label">Nhãn <select id="evidence-label"><option value="">Tất cả</option><option value="positive">Tích cực</option><option value="neutral">Trung tính</option><option value="negative">Tiêu cực</option><option value="unknown">Unknown / bị loại</option></select></label>
+            <label for="evidence-confidence">Confidence tối thiểu <select id="evidence-confidence"><option value="0">Tất cả</option><option value="0.6">60%</option><option value="0.8">80%</option></select></label>
+          </div>
+        </div>
+        <p id="evidence-summary" class="section-intro" aria-live="polite"></p>
+        <div id="evidence" class="evidence-grid"></div>
+        <div class="evidence-actions"><button id="load-more-evidence" class="button-secondary" type="button" hidden>Tải thêm evidence</button></div>
       </section>
-      <section id="evidence-section" hidden>
-        <h2>Evidence transcript</h2><div id="evidence"></div>
-      </section>
-      <section id="transcript-section" hidden>
-        <h2>Transcript trực tiếp</h2><p id="transcript-meta"></p><div id="transcript"></div>
+
+      <section id="transcript-section" class="panel-section" hidden aria-labelledby="transcript-heading">
+        <div class="section-heading"><div><p class="eyebrow">Nguồn dữ liệu hiện tại</p><h2 id="transcript-heading">Transcript trực tiếp</h2></div><p id="transcript-meta" class="section-meta"></p></div>
+        <div id="transcript" class="transcript-list"></div>
       </section>
     </main>
-    <template id="evidence-item">
-      <article class="evidence-item"><div class="evidence-meta"></div><p></p><small></small></article>
-    </template>
+    <template id="metric-card"><article class="card"><span class="card-label"></span><strong></strong><small></small></article></template>
+    <template id="evidence-item"><article class="evidence-item"><div class="evidence-top"><span class="evidence-label"></span><span class="evidence-confidence"></span></div><p></p><small class="evidence-meta"></small></article></template>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

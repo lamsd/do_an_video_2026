@@ -8,7 +8,16 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -17,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .api.analytics import router as analytics_router
+from .api.operator_settings import router as operator_settings_router
 from .auth import owner
 from .config import get_settings
 from .db import SessionLocal, engine, session
@@ -67,6 +77,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Meeting Intelligence Backend", version="0.1.0", lifespan=lifespan)
 app.include_router(analytics_router)
+app.include_router(operator_settings_router)
 
 
 async def poll_active_meetings() -> None:

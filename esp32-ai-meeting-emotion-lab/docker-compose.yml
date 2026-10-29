@@ -36,13 +36,17 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://meeting_agent:meeting_agent@db:5432/meeting_agent}
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: meeting_agent
+      DATABASE_USER: meeting_agent
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       MQTT_HOST: ${MQTT_HOST:-broker}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:?set MQTT_BACKEND_PASSWORD in .env}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
-      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
+      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-tts-1}
       MEDIA_ROOT: /app/data/media
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       HEARTBEAT_TTL_SECONDS: ${HEARTBEAT_TTL_SECONDS:-15}

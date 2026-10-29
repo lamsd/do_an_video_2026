@@ -117,6 +117,12 @@ class AnalysisUnit(Base):
     __tablename__ = "analysis_units"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Units are immutable inputs of one concrete run.  Keeping this link is
+    # what allows an operator to compare two model versions on the same
+    # transcript revision without overwriting the first model's evidence.
+    analysis_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("analysis_runs.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     meeting_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("meetings.id", ondelete="CASCADE"), index=True
     )
@@ -160,11 +166,17 @@ class MeetingSentimentWindow(Base):
     __tablename__ = "meeting_sentiment_windows"
     __table_args__ = (
         UniqueConstraint(
-            "meeting_id", "source_revision", "scope", "speaker_key", "window_start", name="uq_window"
+            "analysis_run_id", "scope", "speaker_key", "window_start", name="uq_window_run"
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Like AnalysisUnit, an aggregate belongs to a run, not merely a meeting
+    # revision.  A revision can legitimately have a rules, TF--IDF and a
+    # checkpoint run during a reproducible comparison.
+    analysis_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("analysis_runs.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     meeting_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("meetings.id", ondelete="CASCADE"), index=True
     )

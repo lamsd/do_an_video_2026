@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     model_artifact_dir: str = ""
     model_artifact_sha256: str = ""
     preprocessing_version: str = "2026-09-v1"
+    # These are consumed by the self-hosted Vexa stack.  The application reads
+    # them only to expose an all-or-nothing, secret-free operator status.
+    transcription_service_url: str = ""
+    transcription_service_token: str = ""
+    transcription_model: str = ""
+    # The local operator runner is intentionally available only for the
+    # loopback development dashboard.  Production must use a deployment/secret
+    # management workflow instead of a browser-triggered Docker recreate.
+    dashboard_local_setup_enabled: bool = True
+    operator_runner_url: AnyHttpUrl = "http://operator-runner:8090"
     # Optional local correction when the transcript provider leaves the host's
     # speech unassigned. Leave blank unless the operator has verified it.
     fallback_speaker_name: str = ""

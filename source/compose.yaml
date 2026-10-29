@@ -16,6 +16,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      operator-runner:
+        condition: service_healthy
     networks: [default, vexa]
     volumes:
       - ./model-artifacts:/models:ro
@@ -56,6 +58,31 @@ services:
     tmpfs:
       - /var/cache/nginx
       - /var/run
+    restart: unless-stopped
+
+  operator-runner:
+    build:
+      context: ./src/operator-runner
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      SETTINGS_PATH: ${PWD}/settings.env
+      COMPOSE_FILE_PATH: ${PWD}/compose.yaml
+      PROJECT_DIRECTORY: ${PWD}
+    working_dir: ${PWD}
+    volumes:
+      # The host project is mounted at the same absolute path so Docker Compose
+      # resolves bind mounts correctly when it talks to the host Docker socket.
+      - ${PWD}:${PWD}
+      - /var/run/docker.sock:/var/run/docker.sock
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
   postgres:
