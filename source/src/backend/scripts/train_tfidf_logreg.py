@@ -1,4 +1,4 @@
-"""Train a versioned Vietnamese TF-IDF + Logistic Regression sentiment artifact.
+"""Train a versioned single-language TF-IDF + Logistic Regression artifact.
 
 This command is intentionally separate from runtime. It accepts only an approved
 CSV corpus, writes no raw text to the artifact metadata, and evaluates the
@@ -17,20 +17,18 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-
 MODEL_DATA_ROOT = Path(__file__).resolve().parents[3] / "model-data"
 if str(MODEL_DATA_ROOT) not in sys.path:
     sys.path.insert(0, str(MODEL_DATA_ROOT))
 
-from meeting_dataset_quality import (  # noqa: E402
+import joblib
+import sklearn
+from meeting_dataset_quality import (
     DATASET_PROFILES,
     DatasetQualityError,
     evaluate_dataset,
     require_ready,
 )
-
-import joblib
-import sklearn
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -42,6 +40,7 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 
 LABELS = ("negative", "neutral", "positive")
+TRAINING_LANGUAGES = ("vi", "en")
 
 
 def _sha256(path: Path) -> str:
@@ -85,6 +84,7 @@ def main() -> None:
     parser.add_argument("--dataset-version", required=True)
     parser.add_argument("--dataset-manifest", required=True, type=Path)
     parser.add_argument("--dataset-profile", choices=DATASET_PROFILES, default="approved-meeting")
+    parser.add_argument("--language", choices=TRAINING_LANGUAGES, default="vi")
     parser.add_argument("--acknowledge-proxy-smoke", action="store_true")
     arguments = parser.parse_args()
 
@@ -97,11 +97,27 @@ def main() -> None:
         expected_dataset_version=arguments.dataset_version,
     )
     require_ready(quality_report)
+    selected_records = {}
+    for name, records in checked_records.items():
+        selected = [record for record in records if record.language == arguments.language]
+        # Historical proxy-smoke CSVs predate the language field. The proxy is
+        # Vietnamese-only and remains test-only, so allow that one legacy
+        # schema without weakening the approved-meeting contract.
+        if arguments.dataset_profile == "proxy-smoke" and arguments.language == "vi":
+            selected = [record for record in records if record.language in {"vi", None}]
+        if not selected:
+            raise DatasetQualityError(f"{name} has no record for language {arguments.language!r}")
+        missing_labels = [label for label in LABELS if label not in {record.label for record in selected}]
+        if missing_labels:
+            raise DatasetQualityError(
+                f"{name} is missing {arguments.language!r} label(s): {', '.join(missing_labels)}"
+            )
+        selected_records[name] = selected
     split_rows = {
         name: (
-            [record.text for record in checked_records[name]],
-            [record.label for record in checked_records[name]],
-            {record.meeting_id for record in checked_records[name]},
+            [record.text for record in selected_records[name]],
+            [record.label for record in selected_records[name]],
+            {record.meeting_id for record in selected_records[name]},
         )
         for name in ("train", "validation", "test")
     }
@@ -128,6 +144,7 @@ def main() -> None:
             "model_type": "tfidf-logreg",
             "model_version": arguments.model_version,
             "labels": list(LABELS),
+            "supported_languages": [arguments.language],
             "pipeline": pipeline,
         },
         model_path,
@@ -139,6 +156,7 @@ def main() -> None:
         "model_version": arguments.model_version,
         "dataset_version": arguments.dataset_version,
         "dataset_profile": arguments.dataset_profile,
+        "training_language": arguments.language,
         "dataset_manifest_sha256": quality_report["manifest_sha256"],
         "dataset_files": {
             name: {"path": str(path), "sha256": _sha256(path)}
@@ -165,6 +183,7 @@ def main() -> None:
         "python": platform.python_version(),
         "scikit_learn": sklearn.__version__,
         "labels": list(LABELS),
+        "supported_languages": [arguments.language],
         "runtime_note": "Trusted local artifact only; do not load unverified joblib files.",
     }
     (arguments.output / "metadata.json").write_text(

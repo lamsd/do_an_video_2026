@@ -21,6 +21,8 @@ from typing import Any, Mapping
 SPLITS = ("train", "validation", "test")
 LABELS = ("negative", "neutral", "positive")
 REQUIRED_COLUMNS = frozenset({"text", "label", "meeting_id"})
+APPROVED_MEETING_REQUIRED_COLUMNS = REQUIRED_COLUMNS | {"language"}
+TRAINING_LANGUAGES = ("vi", "en", "mixed")
 PROFILE_APPROVED_MEETING = "approved-meeting"
 PROFILE_PROXY_SMOKE = "proxy-smoke"
 DATASET_PROFILES = (PROFILE_APPROVED_MEETING, PROFILE_PROXY_SMOKE)
@@ -39,6 +41,8 @@ _PROFILE_MANIFEST_RULES = {
             "annotation_policy",
             "split_policy",
             "meeting_id_policy",
+            "language_policy",
+            "code_switch_policy",
             "output_sha256",
         ),
     },
@@ -61,6 +65,7 @@ class Record:
     text: str
     label: str
     meeting_id: str
+    language: str | None
 
 
 class DatasetQualityError(ValueError):
@@ -87,14 +92,19 @@ def _error(path: Path, message: str) -> DatasetQualityError:
     return DatasetQualityError(f"{path.name}: {message}")
 
 
-def read_split(path: Path) -> list[Record]:
+def read_split(path: Path, *, profile: str) -> list[Record]:
     """Read one UTF-8 split and reject invalid rows without exposing their text."""
     if not path.is_file():
         raise _error(path, "split file does not exist")
     with path.open("r", encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         columns = frozenset(reader.fieldnames or ())
-        missing = sorted(REQUIRED_COLUMNS - columns)
+        required_columns = (
+            APPROVED_MEETING_REQUIRED_COLUMNS
+            if profile == PROFILE_APPROVED_MEETING
+            else REQUIRED_COLUMNS
+        )
+        missing = sorted(required_columns - columns)
         if missing:
             raise _error(path, f"missing required column(s): {', '.join(missing)}")
         records: list[Record] = []
@@ -102,17 +112,28 @@ def read_split(path: Path) -> list[Record]:
             text = normalise_text(row.get("text") or "")
             label = (row.get("label") or "").strip().lower()
             meeting_id = (row.get("meeting_id") or "").strip()
+            language = (row.get("language") or "").strip().lower() or None
             if not text or not label or not meeting_id:
                 raise _error(path, f"row {line_number} has an empty text, label, or meeting_id")
             if label not in LABELS:
                 raise _error(path, f"row {line_number} has unsupported label {label!r}")
-            records.append(Record(text=text, label=label, meeting_id=meeting_id))
+            if profile == PROFILE_APPROVED_MEETING and language not in TRAINING_LANGUAGES:
+                raise _error(
+                    path,
+                    f"row {line_number} language must be one of: {', '.join(TRAINING_LANGUAGES)}",
+                )
+            if language is not None and language not in TRAINING_LANGUAGES:
+                raise _error(
+                    path,
+                    f"row {line_number} language must be one of: {', '.join(TRAINING_LANGUAGES)}",
+                )
+            records.append(Record(text=text, label=label, meeting_id=meeting_id, language=language))
     if not records:
         raise _error(path, "has no data row")
     return records
 
 
-def read_splits(paths: Mapping[str, Path]) -> dict[str, list[Record]]:
+def read_splits(paths: Mapping[str, Path], *, profile: str) -> dict[str, list[Record]]:
     expected = set(SPLITS)
     if set(paths) != expected:
         raise DatasetQualityError(f"split names must be exactly: {', '.join(SPLITS)}")
@@ -120,7 +141,7 @@ def read_splits(paths: Mapping[str, Path]) -> dict[str, list[Record]]:
     errors: list[str] = []
     for name in SPLITS:
         try:
-            records[name] = read_split(paths[name])
+            records[name] = read_split(paths[name], profile=profile)
         except DatasetQualityError as error:
             errors.append(str(error))
     if errors:
@@ -146,6 +167,7 @@ def _length_summary(values: list[int]) -> dict[str, float | int]:
 def _split_summary(records: list[Record]) -> dict[str, Any]:
     hashes = [text_hash(record.text) for record in records]
     labels = Counter(record.label for record in records)
+    languages = Counter(record.language or "unrecorded" for record in records)
     groups = Counter(record.meeting_id for record in records)
     lengths = [len(record.text) for record in records]
     token_lengths = [len(record.text.split()) for record in records]
@@ -156,6 +178,7 @@ def _split_summary(records: list[Record]) -> dict[str, Any]:
         "unique_texts": len(set(hashes)),
         "duplicate_text_rows": len(hashes) - len(set(hashes)),
         "label_counts": {label: labels[label] for label in LABELS},
+        "language_counts": dict(sorted(languages.items())),
         "character_length": _length_summary(lengths),
         "whitespace_token_length": _length_summary(token_lengths),
         "rows_over_256_whitespace_tokens": sum(length > 256 for length in token_lengths),
@@ -246,7 +269,7 @@ def evaluate_dataset(
     )
     records: dict[str, list[Record]] = {}
     try:
-        records = read_splits(paths)
+        records = read_splits(paths, profile=profile)
     except DatasetQualityError as error:
         issues.append(str(error))
 

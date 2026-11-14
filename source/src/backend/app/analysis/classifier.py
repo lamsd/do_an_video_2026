@@ -10,17 +10,34 @@ from .contracts import Prediction, UnitDraft
 
 class SentimentClassifier(Protocol):
     model_version: str
+    supported_languages: tuple[str, ...]
 
     def predict(self, units: list[UnitDraft]) -> list[Prediction]: ...
 
 
 class RuleBaselineClassifier:
-    """Deterministic safety baseline; replace through the SentimentClassifier protocol."""
+    """Deterministic bilingual safety baseline; not a trained model.
 
-    # v2 adds stricter transcript-quality filtering and duplicate suppression.
-    model_version = "baseline-rules-v2"
-    positive_markers = ("yêu", "thương", "cảm ơn", "tốt", "vui", "happy", "love")
-    negative_markers = ("vang", "không được", "lỗi", "khó", "tệ", "bực", "frustrat")
+    This adapter is intentionally transparent about its limits.  It covers the
+    Vietnamese/English meeting paths offered by the dashboard and abstains on
+    any other language through the normal classifier contract.  A calibrated
+    TF-IDF/transformer artifact can replace it without changing the pipeline.
+    """
+
+    # v3 is deliberately versioned separately from v2: it changes supported
+    # languages and lexicons, so runs remain comparable and auditable.
+    model_version = "baseline-rules-v3"
+    supported_languages = ("vi", "en")
+    positive_markers = (
+        "cảm ơn", "tuyệt vời", "rất tốt", "hài lòng", "thành công", "hiệu quả",
+        "yêu", "thương", "tốt", "vui", "mừng", "happy", "love", "thank",
+        "great", "excellent", "good",
+    )
+    negative_markers = (
+        "không được", "không ổn", "không hài lòng", "thất bại", "vấn đề", "sự cố",
+        "lỗi", "khó", "tệ", "bực", "chậm", "trễ", "lo lắng", "frustrat",
+        "angry", "sorry", "error", "issue", "bad", "problem",
+    )
 
     def __init__(self, confidence_threshold: float):
         self.confidence_threshold = confidence_threshold
@@ -32,9 +49,14 @@ class RuleBaselineClassifier:
             text = unit.text.lower()
             positive = sum(marker in text for marker in self.positive_markers)
             negative = sum(marker in text for marker in self.negative_markers)
-            if unit.language != "vi":
+            if unit.language not in self.supported_languages:
                 probabilities = {"positive": 0.0, "neutral": 0.0, "negative": 0.0}
-                predictions.append(Prediction("unknown", 0.0, probabilities, None, 0))
+                reason = (
+                    "mixed_language_requires_multilingual_model"
+                    if unit.language == "mixed"
+                    else "unsupported_language"
+                )
+                predictions.append(Prediction("unknown", 0.0, probabilities, None, 0, reason))
                 continue
             if positive == negative:
                 label, confidence = "neutral", 0.70
@@ -56,6 +78,7 @@ class RuleBaselineClassifier:
                     probabilities,
                     probabilities["positive"] - probabilities["negative"],
                     int((time.perf_counter() - started) * 1000),
+                    None if final_label != "unknown" else "below_confidence_threshold",
                 )
             )
         return predictions
@@ -70,6 +93,7 @@ class DummyContractClassifier:
     """
 
     model_version = "dummy-contract-v1"
+    supported_languages = ("vi",)
 
     def __init__(self, confidence_threshold: float):
         self.confidence_threshold = confidence_threshold
@@ -78,9 +102,14 @@ class DummyContractClassifier:
         predictions: list[Prediction] = []
         for index, unit in enumerate(units):
             started = time.perf_counter()
-            if unit.language != "vi":
+            if unit.language not in self.supported_languages:
                 probabilities = {"positive": 0.0, "neutral": 0.0, "negative": 0.0}
-                predictions.append(Prediction("unknown", 0.0, probabilities, None, 0))
+                reason = (
+                    "mixed_language_requires_multilingual_model"
+                    if unit.language == "mixed"
+                    else "unsupported_language"
+                )
+                predictions.append(Prediction("unknown", 0.0, probabilities, None, 0, reason))
                 continue
             label = ("neutral", "positive", "negative")[index % 3]
             confidence = 0.80
@@ -93,6 +122,7 @@ class DummyContractClassifier:
                     probabilities,
                     probabilities["positive"] - probabilities["negative"],
                     int((time.perf_counter() - started) * 1000),
+                    None if confidence >= self.confidence_threshold else "below_confidence_threshold",
                 )
             )
         return predictions
@@ -129,6 +159,13 @@ class TfidfLogisticRegressionClassifier:
         version = metadata.get("model_version")
         if not isinstance(version, str) or not version:
             raise ValueError("TF-IDF artifact metadata has no model_version")
+        supported_languages = metadata.get("supported_languages", ["vi"])
+        if (
+            not isinstance(supported_languages, list)
+            or not supported_languages
+            or any(language not in {"vi", "en"} for language in supported_languages)
+        ):
+            raise ValueError("TF-IDF artifact supported_languages must be a non-empty vi/en list")
         try:
             artifact = joblib.load(model_path)
         except Exception as exc:  # pragma: no cover - third-party deserialization errors vary by version
@@ -137,6 +174,9 @@ class TfidfLogisticRegressionClassifier:
             raise ValueError("TF-IDF artifact and metadata versions differ")
         if tuple(artifact.get("labels") or ()) != self.supported_labels:
             raise ValueError("TF-IDF artifact labels must be negative, neutral, positive")
+        artifact_languages = tuple(artifact.get("supported_languages", ["vi"]))
+        if artifact_languages != tuple(supported_languages):
+            raise ValueError("TF-IDF artifact and metadata supported_languages differ")
         pipeline = artifact.get("pipeline")
         if not hasattr(pipeline, "predict_proba"):
             raise ValueError("TF-IDF artifact has no probability-capable pipeline")
@@ -144,13 +184,14 @@ class TfidfLogisticRegressionClassifier:
         if set(classes) != set(self.supported_labels):
             raise ValueError("TF-IDF pipeline classes are incompatible with the sentiment contract")
         self.model_version = version
+        self.supported_languages = tuple(supported_languages)
         self.confidence_threshold = confidence_threshold
         self.pipeline = pipeline
         self.classes = classes
 
     def predict(self, units: list[UnitDraft]) -> list[Prediction]:
         predictions: list[Prediction] = []
-        inferable = [unit for unit in units if unit.language == "vi"]
+        inferable = [unit for unit in units if unit.language in self.supported_languages]
         probabilities_by_unit: dict[int, dict[str, float]] = {}
         started = time.perf_counter()
         if inferable:
@@ -161,9 +202,18 @@ class TfidfLogisticRegressionClassifier:
                 }
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         for unit in units:
-            if unit.language != "vi":
+            if unit.language not in self.supported_languages:
                 predictions.append(
-                    Prediction("unknown", 0.0, {label: 0.0 for label in self.supported_labels}, None, 0)
+                    Prediction(
+                        "unknown",
+                        0.0,
+                        {label: 0.0 for label in self.supported_labels},
+                        None,
+                        0,
+                        "mixed_language_requires_multilingual_model"
+                        if unit.language == "mixed"
+                        else "unsupported_language",
+                    )
                 )
                 continue
             probabilities = probabilities_by_unit[id(unit)]
@@ -176,6 +226,7 @@ class TfidfLogisticRegressionClassifier:
                     probabilities,
                     probabilities["positive"] - probabilities["negative"],
                     elapsed_ms,
+                    None if confidence >= self.confidence_threshold else "below_confidence_threshold",
                 )
             )
         return predictions

@@ -19,6 +19,7 @@ def unit(text: str, language: str = "vi") -> UnitDraft:
         segment_ids=["segment-a"],
         text=text,
         language=language,
+        language_source="test",
         token_count=len(text.split()),
         start_at=datetime.now(UTC),
         end_at=datetime.now(UTC),
@@ -27,7 +28,7 @@ def unit(text: str, language: str = "vi") -> UnitDraft:
     )
 
 
-def artifact(tmp_path):
+def artifact(tmp_path, *, supported_languages: list[str] | None = None):
     pipeline = Pipeline(
         [
             ("tfidf", TfidfVectorizer()),
@@ -42,28 +43,26 @@ def artifact(tmp_path):
         ["negative", "negative", "neutral", "neutral", "positive", "positive"],
     )
     model_path = tmp_path / "model.joblib"
-    joblib.dump(
-        {
-            "schema_version": 1,
-            "model_type": "tfidf-logreg",
-            "model_version": "tfidf-logreg-test-v1",
-            "labels": ["negative", "neutral", "positive"],
-            "pipeline": pipeline,
-        },
-        model_path,
-    )
+    artifact = {
+        "schema_version": 1,
+        "model_type": "tfidf-logreg",
+        "model_version": "tfidf-logreg-test-v1",
+        "labels": ["negative", "neutral", "positive"],
+        "pipeline": pipeline,
+    }
+    if supported_languages is not None:
+        artifact["supported_languages"] = supported_languages
+    joblib.dump(artifact, model_path)
     artifact_hash = hashlib.sha256(model_path.read_bytes()).hexdigest()
-    (tmp_path / "metadata.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "model_type": "tfidf-logreg",
-                "model_version": "tfidf-logreg-test-v1",
-                "artifact_sha256": artifact_hash,
-            }
-        ),
-        encoding="utf-8",
-    )
+    metadata = {
+        "schema_version": 1,
+        "model_type": "tfidf-logreg",
+        "model_version": "tfidf-logreg-test-v1",
+        "artifact_sha256": artifact_hash,
+    }
+    if supported_languages is not None:
+        metadata["supported_languages"] = supported_languages
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
     return artifact_hash
 
 
@@ -79,9 +78,24 @@ def test_tfidf_adapter_returns_contract_predictions(tmp_path):
     assert sum(predictions[0].probabilities.values()) == pytest.approx(1)
     assert predictions[1].label == "unknown"
     assert predictions[1].confidence == 0
+    assert predictions[1].abstention_reason == "unsupported_language"
 
 
 def test_tfidf_adapter_rejects_unverified_artifact(tmp_path):
     artifact(tmp_path)
     with pytest.raises(ValueError, match="SHA-256"):
         build_classifier("tfidf-logreg", 0.6, artifact_dir=str(tmp_path), artifact_sha256="bad")
+
+
+def test_tfidf_adapter_uses_signed_language_capability(tmp_path):
+    artifact_hash = artifact(tmp_path, supported_languages=["en"])
+
+    classifier = build_classifier(
+        "tfidf-logreg", 0, artifact_dir=str(tmp_path), artifact_sha256=artifact_hash
+    )
+    predictions = classifier.predict([unit("please review the meeting", "en"), unit("bạn xem lại", "vi")])
+
+    assert classifier.supported_languages == ("en",)
+    assert predictions[0].label in {"negative", "neutral", "positive"}
+    assert predictions[1].label == "unknown"
+    assert predictions[1].abstention_reason == "unsupported_language"

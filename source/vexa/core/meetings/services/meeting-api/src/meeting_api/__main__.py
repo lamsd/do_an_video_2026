@@ -28,11 +28,13 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from urllib.parse import quote
 
 log = logging.getLogger("meeting_api.entrypoint")
 
 
 def _database_url() -> str:
+    """Build an async Postgres URL without treating secret characters as URI syntax."""
     explicit = os.getenv("DATABASE_URL")
     if explicit:
         return explicit
@@ -41,7 +43,10 @@ def _database_url() -> str:
     name = os.getenv("DB_NAME", "vexa")
     user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD", "postgres")
-    return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{name}"
+    return (
+        "postgresql+asyncpg://"
+        f"{quote(user, safe='')}:{quote(password, safe='')}@{host}:{port}/{quote(name, safe='')}"
+    )
 
 
 def _require_config(env: "os._Environ | dict | None" = None) -> None:

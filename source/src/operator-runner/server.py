@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import subprocess
 import tempfile
 from http import HTTPStatus
@@ -72,6 +73,7 @@ def _validate(values: dict[str, Any]) -> None:
 
 
 def _atomic_update(replacements: dict[str, str]) -> None:
+    original_stat = SETTINGS_PATH.stat()
     lines = SETTINGS_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
     emitted: set[str] = set()
     updated: list[str] = []
@@ -87,20 +89,29 @@ def _atomic_update(replacements: dict[str, str]) -> None:
     for key, value in replacements.items():
         if key not in emitted:
             updated.append(f"{key}={value}\n")
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=SETTINGS_PATH.parent, delete=False
-    ) as temporary:
-        temporary.writelines(updated)
-        temporary_path = Path(temporary.name)
-    temporary_path.chmod(0o600)
-    temporary_path.replace(SETTINGS_PATH)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=SETTINGS_PATH.parent, delete=False
+        ) as temporary:
+            temporary.writelines(updated)
+            temporary_path = Path(temporary.name)
+        # The project may be bind-mounted through a user namespace. Preserve
+        # the observed ownership and mode so a runner write never makes
+        # settings.env unreadable to the host user who invokes Docker Compose.
+        os.chown(temporary_path, original_stat.st_uid, original_stat.st_gid)
+        os.chmod(temporary_path, stat.S_IMODE(original_stat.st_mode))
+        os.replace(temporary_path, SETTINGS_PATH)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def _run_fixed_recreate() -> None:
     subprocess.run(
         [
             "docker", "compose", "--env-file", str(SETTINGS_PATH), "-f", str(COMPOSE_FILE_PATH),
-            "up", "-d", "--build", "--force-recreate", "backend", "worker", "dashboard",
+            "up", "-d", "--build", "--force-recreate", "--no-deps", "backend", "worker", "dashboard",
         ],
         cwd=PROJECT_DIRECTORY,
         check=False,

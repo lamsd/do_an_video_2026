@@ -56,7 +56,7 @@ def test_operator_settings_marks_missing_vexa_key_without_returning_it():
         vexa_api_key="",
         vexa_webhook_secret="CHANGE_ME",
         classifier_adapter="rules",
-        model_version="baseline-rules-v2",
+        model_version="baseline-rules-v3",
         preprocessing_version="2026-09-v1",
         transcription_service_url="",
         transcription_service_token="",
@@ -80,7 +80,7 @@ def test_local_setup_rejects_a_non_vexa_key_without_echoing_it():
     request = LocalSetupRequest(
         vexa_api_key="not-a-vexa-key",
         classifier_adapter="rules",
-        model_version="baseline-rules-v2",
+        model_version="baseline-rules-v3",
         preprocessing_version="2026-09-v1",
         sentiment_confidence_threshold=0.6,
     )

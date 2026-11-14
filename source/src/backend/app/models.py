@@ -92,7 +92,12 @@ class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
     __table_args__ = (
         UniqueConstraint(
-            "meeting_id", "kind", "source_revision", "model_version", name="uq_analysis_run"
+            "meeting_id",
+            "kind",
+            "source_revision",
+            "model_version",
+            "preprocessing_version",
+            name="uq_analysis_run",
         ),
     )
 
@@ -104,12 +109,51 @@ class AnalysisRun(Base):
     source_revision: Mapped[int] = mapped_column(Integer)
     model_version: Mapped[str] = mapped_column(String(128))
     preprocessing_version: Mapped[str] = mapped_column(String(128))
+    # Snapshot metadata makes the input of one asynchronous run auditable even
+    # if Vexa updates a transcript before the worker consumes the queued job.
+    source_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    input_segment_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    input_snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     attempt: Mapped[int] = mapped_column(Integer, default=0)
     metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AnalysisRunInputSegment(Base):
+    """Immutable source input captured when an analysis run is created.
+
+    This is deliberately a copy instead of a foreign-keyed view of
+    ``transcript_segments``.  Providers may revise a segment while a queued
+    worker waits, but a prediction must remain reproducible against the input
+    revision recorded on its run.
+    """
+
+    __tablename__ = "analysis_run_input_segments"
+    __table_args__ = (
+        UniqueConstraint("analysis_run_id", "vexa_segment_id", name="uq_run_input_segment"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    analysis_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("analysis_runs.id", ondelete="CASCADE"), index=True
+    )
+    source_segment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    vexa_segment_id: Mapped[str] = mapped_column(String(256))
+    source_segment_revision: Mapped[int] = mapped_column(Integer)
+    speaker_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    speaker_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Provider metadata is preserved as-is. The normalized route is stored on
+    # AnalysisUnit after preprocessing, together with its route evidence.
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    start_seconds: Mapped[float] = mapped_column(Float)
+    end_seconds: Mapped[float] = mapped_column(Float)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=True)
+    retracted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -132,6 +176,7 @@ class AnalysisUnit(Base):
     segment_ids: Mapped[list] = mapped_column(JSON)
     text: Mapped[str] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(16), default="unknown")
+    language_source: Mapped[str] = mapped_column(String(64), default="unknown")
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -158,6 +203,7 @@ class SentimentPrediction(Base):
     probabilities: Mapped[dict] = mapped_column(JSON)
     polarity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     inference_ms: Mapped[int] = mapped_column(Integer, default=0)
+    abstention_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

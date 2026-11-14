@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .api.analytics import router as analytics_router
 from .api.operator_settings import router as operator_settings_router
+from .analysis.quality import evaluate_segment
 from .auth import owner
 from .config import get_settings
 from .db import SessionLocal, engine, session
@@ -36,7 +37,7 @@ from .repositories.analysis import get_or_create_run
 from .schema_compat import apply_compatibility_upgrades
 from .schemas import MeetingResponse, SegmentResponse, StartMeetingRequest
 from .service import get_owned_meeting, reconcile
-from .vexa import VexaClient, VexaError, parse_google_meet_url
+from .vexa import VexaClient, VexaError, parse_meeting_url
 
 log = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ async def start_meeting(
     user: str = Depends(owner),
 ):
     try:
-        parsed = parse_google_meet_url(body.meeting_url)
+        parsed = parse_meeting_url(body.meeting_url)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -154,10 +155,12 @@ async def start_meeting(
         return meeting_response(existing)
 
     try:
-        spawned = await client().start_bot(parsed, body.bot_name)
+        spawned = await client().start_bot(
+            parsed, body.bot_name, body.transcription_language
+        )
     except VexaError as exc:
         if exc.status_code == 409:
-            raise HTTPException(409, "An active bot already exists for this Google Meet") from exc
+            raise HTTPException(409, "An active bot already exists for this meeting") from exc
         raise HTTPException(502, str(exc)) from exc
     row = Meeting(
         owner_id=user,
@@ -230,19 +233,32 @@ async def transcript(
             .order_by(TranscriptSegment.start_seconds)
         )
     ).all()
-    return [
-        SegmentResponse(
-            id=row.id,
-            vexa_segment_id=row.vexa_segment_id,
-            speaker=row.speaker_name,
+    response: list[SegmentResponse] = []
+    for row in rows:
+        decision = evaluate_segment(
             text=row.text,
-            start=row.start_seconds,
-            end=row.end_seconds,
+            upstream_language=row.language,
             is_final=row.is_final,
-            revision=row.revision,
+            retracted=row.retracted,
+            duration=row.end_seconds - row.start_seconds,
         )
-        for row in rows
-    ]
+        response.append(
+            SegmentResponse(
+                id=row.id,
+                vexa_segment_id=row.vexa_segment_id,
+                speaker=row.speaker_name,
+                text=row.text,
+                language=row.language,
+                start=row.start_seconds,
+                end=row.end_seconds,
+                is_final=row.is_final,
+                revision=row.revision,
+                analysis_eligible=decision.status == "accepted",
+                quality_reasons=decision.reasons,
+                analysis_language=decision.language,
+            )
+        )
+    return response
 
 
 @app.post("/v1/meetings/{meeting_id}/stop")
@@ -255,7 +271,10 @@ async def stop_meeting(
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except VexaError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        # Bot runners time out independently.  Vexa has already cleaned up in
+        # that case, so a 404 must not leave our meeting stuck as active.
+        if exc.status_code != 404:
+            raise HTTPException(502, str(exc)) from exc
     meeting.status = "stopping"
     await db.commit()
     return {"status": "stopping"}

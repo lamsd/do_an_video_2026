@@ -17,6 +17,7 @@ console.log("\n=== 1. Default pin: en-US ===");
   const args = getJoinBrowserArgs();
   assert(args.includes("--lang=en-US"), "getJoinBrowserArgs() carries --lang=en-US by default");
   assert(args.includes("--accept-lang=en-US,en"), "getJoinBrowserArgs() carries --accept-lang=en-US,en by default");
+  assert(!args.includes("--incognito"), "guest joins use their ephemeral profile, not incognito");
 }
 
 console.log("\n=== 2. Negative control: the knob really drives it (A2) ===");

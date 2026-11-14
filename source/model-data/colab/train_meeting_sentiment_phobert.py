@@ -14,11 +14,12 @@ Colab setup (run in a notebook cell, then upload or mount only approved data):
         --output-dir /content/meeting-sentiment-phobert-v1
 
 Each CSV must be UTF-8 and have exactly these semantic fields:
-    text,label,meeting_id
+    text,label,meeting_id,language
 
-`label` is one of negative, neutral, positive. `meeting_id` is mandatory so the
-script can reject leakage across train/validation/test. Do not use this script
-with depression, clinical, or unapproved transcript datasets.
+`label` is one of negative, neutral, positive. `language` is a reviewed route;
+PhoBERT training accepts only `vi`. `meeting_id` is mandatory so the script can
+reject leakage across train/validation/test. Do not use this script with
+depression, clinical, or unapproved transcript datasets.
 """
 
 from __future__ import annotations
@@ -56,6 +57,7 @@ from underthesea import word_tokenize
 
 
 LABEL_TO_ID = {label: index for index, label in enumerate(LABELS)}
+TRAINING_LANGUAGES = ("vi",)
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,6 +80,7 @@ def parse_args() -> argparse.Namespace:
         help="Optional path to write the aggregate preflight report, including when validation is blocked.",
     )
     parser.add_argument("--model-version", required=True)
+    parser.add_argument("--language", choices=TRAINING_LANGUAGES, default="vi")
     parser.add_argument("--model-name", default="vinai/phobert-base-v2")
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--epochs", type=float, default=4.0)
@@ -200,8 +203,22 @@ def main() -> int:
     if args.quality_report:
         write_quality_report(args.quality_report, quality_report)
     require_ready(quality_report)
+    selected_splits: dict[str, list[Record]] = {}
+    for name, examples in splits.items():
+        selected = [example for example in examples if example.language == args.language]
+        # Proxy outputs before the language contract were Vietnamese-only.
+        if args.dataset_profile == "proxy-smoke" and args.language == "vi":
+            selected = [example for example in examples if example.language in {"vi", None}]
+        if not selected:
+            raise DatasetQualityError(f"{name} has no examples for language {args.language!r}")
+        missing_labels = [label for label in LABELS if label not in {example.label for example in selected}]
+        if missing_labels:
+            raise DatasetQualityError(
+                f"{name} is missing {args.language!r} label(s): {', '.join(missing_labels)}"
+            )
+        selected_splits[name] = selected
     if args.validate_only:
-        for name, examples in splits.items():
+        for name, examples in selected_splits.items():
             label_counts = Counter(example.label for example in examples)
             meeting_count = len({example.meeting_id for example in examples})
             print(f"{name}: {len(examples)} examples; {meeting_count} groups; labels={dict(label_counts)}")
@@ -220,7 +237,10 @@ def main() -> int:
         id2label={index: label for index, label in enumerate(LABELS)},
         label2id=LABEL_TO_ID,
     )
-    encoded = {name: to_dataset(examples, tokenizer, args.max_length) for name, examples in splits.items()}
+    encoded = {
+        name: to_dataset(examples, tokenizer, args.max_length)
+        for name, examples in selected_splits.items()
+    }
 
     def compute_metrics(prediction: Any) -> dict[str, float]:
         logits, labels = prediction
@@ -276,6 +296,7 @@ def main() -> int:
         "model_version": args.model_version,
         "dataset_version": args.dataset_version,
         "dataset_profile": args.dataset_profile,
+        "training_language": args.language,
         "dataset_manifest_sha256": quality_report["manifest_sha256"],
         "quality_gate": {
             "ready_to_train": quality_report["ready_to_train"],
@@ -289,7 +310,7 @@ def main() -> int:
         "test": metrics(test_labels, softmax(test_logits, temperature), threshold),
         "split_counts": {
             name: {"units": len(examples), "meetings": len({item.meeting_id for item in examples})}
-            for name, examples in splits.items()
+            for name, examples in selected_splits.items()
         },
         "hyperparameters": {
             "base_model": args.model_name,
@@ -312,6 +333,7 @@ def main() -> int:
         f"- Model version: `{args.model_version}`\n"
         f"- Dataset version: `{args.dataset_version}`\n"
         f"- Dataset profile: `{args.dataset_profile}`\n"
+        f"- Training language: `{args.language}`.\n"
         "- Task: three-class polarity of consented Vietnamese meeting transcript units.\n"
         "- Labels: `negative`, `neutral`, `positive`; low-confidence inference is `unknown`.\n"
         "- Not for depression screening, clinical assessment, employment, education, or automated decisions about people.\n"

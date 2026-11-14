@@ -8,6 +8,8 @@ import time
 import logging
 import asyncio
 import json
+import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
@@ -94,6 +96,60 @@ VAD_FILTER = _env_bool("VAD_FILTER", True)
 VAD_FILTER_THRESHOLD = _env_float("VAD_FILTER_THRESHOLD", 0.5)
 VAD_MIN_SILENCE_DURATION_MS = _env_int("VAD_MIN_SILENCE_DURATION_MS", 160)
 VAD_MAX_SPEECH_DURATION_S = _env_float("VAD_MAX_SPEECH_DURATION_S", 15.0)  # max segment length before forced split
+# Short windows and uncertain auto-language results are the main source of
+# plausible-looking but unrelated text (for example Thai/CJK tokens produced
+# from room noise).  These are quality gates, not model tuning: a suppressed
+# window remains absent instead of being published as a false transcript.
+MIN_AUDIO_DURATION_S = _env_float("MIN_AUDIO_DURATION_S", 0.5)
+MIN_AUTO_LANGUAGE_PROBABILITY = _env_float("MIN_AUTO_LANGUAGE_PROBABILITY", 0.45)
+# The bot is a meeting assistant, not a word-for-word dictation device.  A
+# short isolated acknowledgement is not useful analytics input and is a common
+# place for Whisper to hallucinate.  Keep these independently tunable because
+# input duration and decoded speech duration are not the same after VAD.
+MIN_TRANSCRIPT_DURATION_S = _env_float("MIN_TRANSCRIPT_DURATION_S", 1.0)
+MIN_TRANSCRIPT_WORDS = _env_int("MIN_TRANSCRIPT_WORDS", 3)
+# A rolling prompt helps when transcribing one long recording, but a live bot
+# sends short windows. A bad result in one window can be echoed into the next,
+# so the safe realtime default is to not reuse an incoming prompt.
+USE_REQUEST_PROMPT = _env_bool("USE_REQUEST_PROMPT", False)
+
+# High-confidence media/outro hallucinations are not caught by acoustic
+# confidence alone.  These patterns are deliberately narrow: they require a
+# channel subscription plus video-outro wording, rather than suppressing an
+# ordinary use of the word "subscribe" in a real meeting.
+KNOWN_HALLUCINATION_PATTERNS = (
+    re.compile(
+        r"\b(?:h[aã]y\s+)?subscribe\s+cho\s+k[eê]nh\b.*"
+        r"\bkh[oô]ng\s+b[oỏ]\s+l[ơỡ]\b.*\bvideo\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:h[aã]y\s+|đ[ừu]ng\s+qu[eê]n\s+)?(?:nh[aấ]n|b[aấ]m)?\s*"
+        r"(?:n[uú]t\s+)?(?:đ[aă]ng\s*k[ýy]|subscribe)\s+(?:cho\s+|v[aà]o\s+)?"
+        r"(?:k[eê]nh|channel)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:like|th[ií]ch)\b.{0,40}\b(?:đ[aă]ng\s*k[ýy]|subscribe)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bc[aả]m\s+[oơ]n\s+c[aá]c\s+b[aạ]n\b.*"
+        r"\b(?:theo\s+d[oõ]i|video)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:c[aả]m\s+[oơ]n|thank(?:s|\s+you))\b.{0,80}"
+        r"\b(?:đ[aã]\s+theo\s+d[oõ]i|for\s+watching)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bh[eẹ]n\s+g[aặ]p\s+l[aạ]i\b.{0,80}\b(?:video|k[eê]nh|channel)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bgracias\s+por\s+ver\s+el\s+video\b", re.IGNORECASE),
+)
+WORD = re.compile(r"\w+", re.UNICODE)
 
 # Temperature fallback chain
 USE_TEMPERATURE_FALLBACK = _env_bool("USE_TEMPERATURE_FALLBACK", False)
@@ -119,6 +175,40 @@ def _looks_like_hallucination(segments: List[Dict[str, Any]]) -> bool:
         if float(s.get("avg_logprob", 0.0)) < LOG_PROB_THRESHOLD:
             return True
     return False
+
+
+def _normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", text or "")).strip()
+
+
+def _known_hallucination(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return bool(normalized) and any(pattern.search(normalized) for pattern in KNOWN_HALLUCINATION_PATTERNS)
+
+
+def _is_too_short_result(text: str, duration: float) -> bool:
+    return duration < MIN_TRANSCRIPT_DURATION_S or len(WORD.findall(text)) < MIN_TRANSCRIPT_WORDS
+
+
+def _auto_language_is_uncertain(requested_language: Optional[str], probability: float) -> bool:
+    """Only auto-detection has a language-confidence threshold.
+
+    An explicit ``vi``/``en`` request intentionally bypasses this condition:
+    the caller has already supplied stronger context than Whisper's language
+    classifier gets from a short audio window.
+    """
+    return not requested_language and probability < MIN_AUTO_LANGUAGE_PROBABILITY
+
+
+def _empty_transcription(language: Optional[str] = None, duration: float = 0.0) -> Dict[str, Any]:
+    """Return the compatible empty response that makes the bot publish nothing."""
+    return {
+        "text": "",
+        "language": language or "unknown",
+        "language_probability": 0.0,
+        "duration": duration,
+        "segments": [],
+    }
 
 # API Token Authentication
 API_TOKEN = os.getenv("API_TOKEN", "").strip()
@@ -311,6 +401,12 @@ async def startup_event():
         f"log_prob_threshold={LOG_PROB_THRESHOLD}, "
         f"no_speech_threshold={NO_SPEECH_THRESHOLD}, "
         f"vad_filter={VAD_FILTER}, "
+        f"vad_threshold={VAD_FILTER_THRESHOLD}, "
+        f"min_audio_duration_s={MIN_AUDIO_DURATION_S}, "
+        f"min_transcript_duration_s={MIN_TRANSCRIPT_DURATION_S}, "
+        f"min_transcript_words={MIN_TRANSCRIPT_WORDS}, "
+        f"use_request_prompt={USE_REQUEST_PROMPT}, "
+        f"min_auto_language_probability={MIN_AUTO_LANGUAGE_PROBABILITY}, "
         f"repetition_penalty={REPETITION_PENALTY}, "
         f"no_repeat_ngram_size={NO_REPEAT_NGRAM_SIZE}"
     )
@@ -497,6 +593,13 @@ async def transcribe_audio(
         
         # Ensure audio is contiguous array
         audio_array = np.ascontiguousarray(audio_array, dtype=np.float32)
+        audio_duration = len(audio_array) / sample_rate if sample_rate else 0.0
+        if audio_duration < MIN_AUDIO_DURATION_S:
+            logger.info(
+                f"Worker {WORKER_ID} skipped {audio_duration:.2f}s audio below "
+                f"MIN_AUDIO_DURATION_S={MIN_AUDIO_DURATION_S}s"
+            )
+            return _empty_transcription(language, audio_duration)
         
         # Transcribe (with optional temperature fallback)
         requested_temp = float(temperature) if temperature else 0.0
@@ -513,16 +616,15 @@ async def transcribe_audio(
             f"max_speech={req_max_speech}s, min_silence={req_min_silence}ms"
         )
 
-        best: Optional[Tuple[str, str, float, List[Dict[str, Any]]]] = None
+        best: Optional[Tuple[str, str, float, float, List[Dict[str, Any]]]] = None
         last_info = None
-        last_segments: List[Dict[str, Any]] = []
 
         async def _run_temperature_attempts() -> None:
             # TRANSCRIPTION_TIMEOUT_S bounds ONE call to this coroutine (see below), i.e. the
             # whole request - every temperature-fallback attempt in `temps` together, not each
             # attempt individually. With USE_TEMPERATURE_FALLBACK on, temps has 6 entries; a
             # per-attempt bound would let a single request cost up to 6x TRANSCRIPTION_TIMEOUT_S.
-            nonlocal best, last_info, last_segments
+            nonlocal best, last_info
             for t in temps:
                 # Run blocking transcription in thread pool to avoid blocking event loop
                 def _transcribe_sync():
@@ -530,7 +632,7 @@ async def transcribe_audio(
                         audio_array,
                         language=language,
                         task=task,
-                        initial_prompt=prompt,
+                        initial_prompt=prompt if USE_REQUEST_PROMPT else None,
                         temperature=t,
                         beam_size=BEAM_SIZE,
                         best_of=BEST_OF,
@@ -578,23 +680,36 @@ async def transcribe_audio(
                             for w in segment.words
                         ]
                     segments.append(seg_dict)
-                last_segments = segments
-
                 if _looks_like_silence(segments):
                     best = ("", info.language, getattr(info, 'language_probability', 0.0), 0.0, [])
                     logger.info(f"Worker {WORKER_ID} detected silence (temp={t})")
                     return
 
+                full_text = " ".join([s["text"].strip() for s in segments]).strip()
+                duration = segments[-1]["end"] if segments else 0.0
+                language_probability = float(getattr(info, 'language_probability', 0.0) or 0.0)
                 is_hallucination = _looks_like_hallucination(segments)
+                uncertain_language = _auto_language_is_uncertain(language, language_probability)
+                known_hallucination = _known_hallucination(full_text)
+                too_short_result = _is_too_short_result(full_text, duration)
 
-                if not is_hallucination:
-                    full_text = " ".join([s["text"].strip() for s in segments]).strip()
-                    duration = segments[-1]["end"] if segments else 0.0
-                    best = (full_text, info.language, getattr(info, 'language_probability', 0.0), duration, segments)
+                if not is_hallucination and not uncertain_language and not known_hallucination and not too_short_result:
+                    best = (full_text, info.language, language_probability, duration, segments)
                     logger.info(f"Worker {WORKER_ID} accepted transcription (temp={t})")
                     return
                 else:
-                    logger.info(f"Worker {WORKER_ID} rejected transcription as hallucination/low-confidence (temp={t})")
+                    if known_hallucination:
+                        reason = "known media-outro hallucination"
+                    elif too_short_result:
+                        reason = "too-short decoded result"
+                    elif uncertain_language:
+                        reason = "uncertain auto-language"
+                    else:
+                        reason = "hallucination/low-confidence"
+                    logger.info(
+                        f"Worker {WORKER_ID} rejected transcription as {reason} "
+                        f"(temp={t}, duration={duration:.2f}s, language_probability={language_probability:.2f})"
+                    )
 
         try:
             await asyncio.wait_for(_run_temperature_attempts(), timeout=TRANSCRIPTION_TIMEOUT_S)
@@ -607,13 +722,17 @@ async def transcribe_audio(
             raise HTTPException(status_code=504, detail="Transcription timed out")
 
         if best is None:
-            # Fall back to last attempt (even if it looks low-quality) to preserve backward behavior.
+            # Do not fall back to a candidate we explicitly rejected.  The old
+            # behavior published it anyway, turning room noise into a false
+            # transcript and consequently false dashboard analytics.
             info = last_info
-            segments = last_segments
-            full_text = " ".join([s["text"].strip() for s in segments]).strip()
-            duration = segments[-1]["end"] if segments else 0.0
             lang_prob = getattr(info, 'language_probability', 0.0) if info else 0.0
-            best = (full_text, info.language if info else (language or "unknown"), lang_prob, duration, segments)
+            detected = info.language if info else (language or "unknown")
+            logger.warning(
+                f"Worker {WORKER_ID} suppressed transcription because no quality-passing "
+                f"candidate was produced (language={detected}, language_probability={lang_prob})"
+            )
+            best = ("", detected, lang_prob, 0.0, [])
 
         full_text, detected_language, detected_language_probability, duration, segments = best
         logger.info(f"Worker {WORKER_ID} transcription completed - language: {detected_language}, language_probability: {detected_language_probability}")

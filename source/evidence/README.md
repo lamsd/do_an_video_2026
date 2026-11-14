@@ -35,7 +35,7 @@ Không commit thư mục run nếu chưa redaction và chưa được duyệt. K
 2. Kiểm tra `stdout.log`; chỉ ghi `PASS` khi exit code bằng 0.
 3. Chuẩn bị `source/settings.env` cục bộ, rồi chạy `../scripts/capture-evidence.sh integration EVID-YYYYMMDD-INT01` để kiểm chứng API → PostgreSQL → Valkey → worker → analytics.
 4. Lặp integration tối thiểu 10 lần nếu cần báo success rate; mỗi lần dùng Evidence ID riêng.
-5. Đổi `CLASSIFIER_ADAPTER=dummy-contract` và `MODEL_VERSION=dummy-contract-v1`, chạy lại integration để kiểm chứng RQ2. Khôi phục hai biến về `rules`/`baseline-rules-v2` sau run.
+5. Đổi `CLASSIFIER_ADAPTER=dummy-contract` và `MODEL_VERSION=dummy-contract-v1`, chạy lại integration để kiểm chứng RQ2. Khôi phục hai biến về `rules`/`baseline-rules-v3` sau run.
 6. Chỉ thực hiện Vexa/Google Meet E2E sau consent và HTTPS webhook; ghi loại dữ liệu là `real-consented`, redaction log/screenshot trước khi lưu.
 7. Điền số liệu từ bundle vào Chương 8: ID, commit, môi trường, command, số run, pass/fail, giới hạn. Không suy diễn F1, ASR WER hay SLA từ fixture synthetic.
 

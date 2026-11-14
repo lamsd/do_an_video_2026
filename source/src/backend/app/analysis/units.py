@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from ..models import TranscriptSegment
+from ..models import AnalysisRunInputSegment, TranscriptSegment
 from .contracts import UnitDraft
 from .quality import evaluate_segment
 
@@ -9,16 +9,19 @@ def _as_datetime(epoch_seconds: float) -> datetime:
     return datetime.fromtimestamp(epoch_seconds, tz=UTC)
 
 
-def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
+SegmentInput = TranscriptSegment | AnalysisRunInputSegment
+
+
+def build_units(segments: list[SegmentInput]) -> list[UnitDraft]:
     """Build bounded same-speaker units from finalized transcript rows."""
     units: list[UnitDraft] = []
-    current: list[tuple[TranscriptSegment, str, str]] = []
+    current: list[tuple[SegmentInput, str, str, str]] = []
     last_accepted: dict[str, tuple[str, float]] = {}
 
     def flush() -> None:
         if not current:
             return
-        first, _, language = current[0]
+        first, _, language, language_source = current[0]
         last = current[-1][0]
         text = " ".join(item[1] for item in current)
         units.append(
@@ -28,6 +31,7 @@ def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
                 segment_ids=[item[0].vexa_segment_id for item in current],
                 text=text,
                 language=language,
+                language_source=language_source,
                 token_count=len(text.split()),
                 start_at=_as_datetime(first.start_seconds),
                 end_at=_as_datetime(last.end_seconds),
@@ -54,6 +58,7 @@ def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
                     segment_ids=[segment.vexa_segment_id],
                     text=decision.normalized_text,
                     language=decision.language,
+                    language_source=decision.language_source,
                     token_count=len(decision.normalized_text.split()),
                     start_at=_as_datetime(segment.start_seconds),
                     end_at=_as_datetime(segment.end_seconds),
@@ -71,9 +76,12 @@ def build_units(segments: list[TranscriptSegment]) -> list[UnitDraft]:
             continue
         last_accepted[speaker_identity] = (decision.normalized_text.casefold(), segment.start_seconds)
         same_speaker = bool(current) and current[0][0].speaker_key == segment.speaker_key
+        same_language = bool(current) and current[0][2] == decision.language
         within_window = bool(current) and segment.end_seconds - current[0][0].start_seconds <= 45
-        if current and (not same_speaker or not within_window or len(current) >= 3):
+        if current and (not same_speaker or not same_language or not within_window or len(current) >= 3):
             flush()
-        current.append((segment, decision.normalized_text, decision.language))
+        current.append(
+            (segment, decision.normalized_text, decision.language, decision.language_source)
+        )
     flush()
     return units

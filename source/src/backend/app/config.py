@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import quote
 
 from pydantic import AnyHttpUrl, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,7 +14,16 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8088
     vexa_mode: str = "cloud"
-    database_url: str
+    # An explicit URL remains available for a managed PostgreSQL deployment.
+    # Local Compose derives it from the individual POSTGRES_* variables below,
+    # so a valid password with URI-reserved characters is never interpolated
+    # into a malformed URL by Docker Compose.
+    database_url: str = ""
+    postgres_host: str = "postgres"
+    postgres_port: int = 5432
+    postgres_db: str = "meeting"
+    postgres_user: str = "meeting"
+    postgres_password: str = ""
     vexa_api_base: AnyHttpUrl
     vexa_api_key: str = ""
     vexa_webhook_secret: str = ""
@@ -26,12 +36,14 @@ class Settings(BaseSettings):
     # The adapter is explicit so a test/demonstration never silently runs a
     # different classifier under the same model version.
     classifier_adapter: str = "rules"
-    model_version: str = "baseline-rules-v2"
+    model_version: str = "baseline-rules-v3"
     # A read-only directory mounted into backend/worker for a versioned, trusted
     # model artifact. It is intentionally empty for the deterministic rule baseline.
     model_artifact_dir: str = ""
     model_artifact_sha256: str = ""
-    preprocessing_version: str = "2026-09-v1"
+    # Increment whenever normalization, language routing or unit boundaries
+    # change so old evidence is not presented as a run from this pipeline.
+    preprocessing_version: str = "2026-11-stt-quality-gate-v2"
     # These are consumed by the self-hosted Vexa stack.  The application reads
     # them only to expose an all-or-nothing, secret-free operator status.
     transcription_service_url: str = ""
@@ -49,6 +61,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
+        if not self.database_url:
+            if not self.postgres_password:
+                raise ValueError("POSTGRES_PASSWORD is required when DATABASE_URL is unset")
+            self.database_url = (
+                "postgresql+asyncpg://"
+                f"{quote(self.postgres_user, safe='')}:{quote(self.postgres_password, safe='')}"
+                f"@{self.postgres_host}:{self.postgres_port}/{quote(self.postgres_db, safe='')}"
+            )
         if self.vexa_mode not in {"cloud", "self_host"}:
             raise ValueError("VEXA_MODE must be cloud or self_host")
         if self.app_env == "production" and (not self.vexa_api_key or not self.vexa_webhook_secret):

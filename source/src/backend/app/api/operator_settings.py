@@ -66,11 +66,15 @@ def build_operator_settings(settings: Settings) -> dict[str, Any]:
         "environment": settings.app_env,
         "security": {
             "secrets_are_hidden": True,
-            "apply_method": "local_operator_script",
+            "apply_method": (
+                "dashboard_local_runner"
+                if settings.app_env == "development" and settings.dashboard_local_setup_enabled
+                else "local_operator_script"
+            ),
             "dashboard_submit_available": (
                 settings.app_env == "development" and settings.dashboard_local_setup_enabled
             ),
-            "message": "Secrets are entered only in the local operator terminal and are never shown here.",
+            "message": "Secrets are never shown here. In local development, a submitted replacement key is sent once to the internal setup runner.",
         },
         "restart": {
             "recreate_services": RECREATE_SERVICES,

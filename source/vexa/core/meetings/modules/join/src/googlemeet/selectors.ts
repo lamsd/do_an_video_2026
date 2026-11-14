@@ -346,14 +346,13 @@ export const googleMicrophoneButtonSelectors: string[] = [
 
 // Name input — locale-agnostic FIRST. `aria-label="Your name"` is English-only,
 // so the non-English lobby (Hungarian: "A neved") never matched and the bot
-// could not fill its name. The lobby has exactly one editable text input, so
-// match by structure/role; keep the English aria-label + placeholder as
-// fallbacks.
+// could not fill its name. A bare text input is deliberately NOT accepted:
+// Google can redirect an unavailable/blocked meeting to its public marketing
+// page, whose newsletter form is also a visible text input. Only use the
+// Google Meet-specific `jsname` shape, then narrow label/placeholder fallbacks.
 export const googleNameInputSelectors: string[] = [
   // Locale-agnostic: the single text input in the pre-join lobby form.
   'input[jsname][type="text"]',
-  'input[type="text"]:not([aria-hidden="true"])',
-  'div[jscontroller] input[type="text"]',
   // English fallbacks.
   'input[type="text"][aria-label="Your name"]',
   'input[placeholder*="name"]',

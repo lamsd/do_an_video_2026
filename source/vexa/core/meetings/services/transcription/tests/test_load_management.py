@@ -173,6 +173,10 @@ def test_hanging_transcription_call_times_out_and_frees_the_slot(client, monkeyp
     monkeypatch.setattr(svc, "API_TOKEN", "")
     monkeypatch.setattr(svc, "model", _HangingModel())
     monkeypatch.setattr(svc, "TRANSCRIPTION_TIMEOUT_S", 0.05)
+    # This test exercises the timeout after inference has started.  The
+    # production short-audio gate is tested independently and would otherwise
+    # return before the intentionally hanging fake model is reached.
+    monkeypatch.setattr(svc, "MIN_AUDIO_DURATION_S", 0.0)
 
     r = client.post(
         "/v1/audio/transcriptions",

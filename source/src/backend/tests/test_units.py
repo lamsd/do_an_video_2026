@@ -49,3 +49,17 @@ def test_builder_ignores_immediate_duplicate_final_segment():
     )
     assert len(units) == 1
     assert units[0].segment_ids == ["one"]
+
+
+def test_builder_does_not_merge_adjacent_segments_with_different_languages():
+    english = segment("two", 1_700_000_003, "Please review the meeting notes")
+    english.language = "en"
+    units = build_units(
+        [
+            segment("one", 1_700_000_000, "Bạn đang làm gì vậy"),
+            english,
+        ]
+    )
+
+    assert [unit.segment_ids for unit in units] == [["one"], ["two"]]
+    assert [unit.language for unit in units] == ["vi", "en"]

@@ -52,6 +52,9 @@ export function resolveUiInteractionMode(botConfig: BotConfig): "humanized" | "s
 
 /** Poll cadence for the ordered selector resolvers. */
 const SELECTOR_POLL_MS = 300;
+/** A guest that remains on Meet's bootstrap screen cannot reach a lobby. Do
+ * not spend the full name-input timeout pretending it is awaiting a host. */
+const GUEST_LOBBY_BOOTSTRAP_MAX_MS = 20000;
 /** The structural CTA scan runs every Nth poll — it is a full-document walk. */
 const CTA_SCAN_EVERY_POLLS = 5;
 /** The scan only starts once the lobby SPA has had time to finish rendering:
@@ -162,6 +165,57 @@ async function firstVisibleSelector(
     } catch { /* invalid selector or detached node — the next entry still gets its chance */ }
   }
   return null;
+}
+
+/**
+ * Google sometimes serves its public Workspace marketing page, or leaves an
+ * anonymous browser on "Getting ready…", instead of exposing a Meet lobby.
+ * Neither state can be resolved by clicking or retrying selectors. Detect it
+ * explicitly so the caller receives an honest, actionable failure rather than
+ * a two-minute "joining" spinner followed by an opaque selector timeout.
+ *
+ * UI locale is pinned to English before this runs (withPinnedMeetLocale), so
+ * these deliberately narrow phrases are stable and cannot match a real lobby.
+ */
+async function guestLobbyUnavailableReason(page: Page, elapsedMs: number): Promise<string | null> {
+  try {
+    const text = await page.evaluate(() => (document.body?.innerText || "").replace(/\s+/g, " ").trim());
+    const marketingPage = text.includes("Video calls, enhanced with AI")
+      && text.includes("Try Meet for work")
+      && text.includes("Go to app");
+    if (marketingPage) {
+      return "Google Meet redirected the anonymous bot to its public marketing page; this meeting does not expose a guest lobby.";
+    }
+    if (elapsedMs >= GUEST_LOBBY_BOOTSTRAP_MAX_MS
+      && text.includes("Getting ready")
+      && text.includes("You'll be able to join in just a moment")) {
+      return "Google Meet kept the anonymous bot on its Getting ready screen and did not expose a guest lobby.";
+    }
+  } catch {
+    // Keep the existing selector flow if the page is navigating or detached.
+  }
+  return null;
+}
+
+async function waitForGuestNameInput(
+  page: Page,
+  timeoutMs: number
+): Promise<{ handle: ElementHandle<Element>; selector: string }> {
+  const started = Date.now();
+  do {
+    const hit = await firstVisibleSelector(page, googleNameInputSelectors);
+    if (hit) return hit;
+
+    const unavailable = await guestLobbyUnavailableReason(page, Date.now() - started);
+    if (unavailable) {
+      await page.screenshot({ path: "/app/storage/screenshots/bot-checkpoint-guest-lobby-unavailable.png", fullPage: true }).catch(() => undefined);
+      log(`Guest lobby unavailable: ${unavailable}`);
+      throw new AdmissionError("join_failure", unavailable);
+    }
+    await page.waitForTimeout(SELECTOR_POLL_MS);
+  } while (Date.now() - started < timeoutMs);
+
+  throw new Error(await describeSelectorMiss(page, googleNameInputSelectors, timeoutMs, "name input", null));
 }
 
 /**
@@ -451,12 +505,7 @@ export async function joinGoogleMeeting(
     // Anonymous flow: enter bot name and ask to join
     log("Attempting to find name input field...");
 
-    const { handle: nameHandle, selector: nameFieldSelector } = await waitForAnySelector(
-      page,
-      googleNameInputSelectors,
-      120000,
-      "name input"
-    );
+    const { handle: nameHandle, selector: nameFieldSelector } = await waitForGuestNameInput(page, 120000);
     log("Name input field found.");
 
     await page.screenshot({ path: '/app/storage/screenshots/bot-checkpoint-0-name-field-found.png', fullPage: true });

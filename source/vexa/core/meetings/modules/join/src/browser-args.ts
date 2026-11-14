@@ -45,7 +45,10 @@ export function getLocaleBrowserArgs(): string[] {
 }
 
 export const JOIN_BROWSER_ARGS: readonly string[] = [
-  "--incognito",
+  // Each bot already starts with its own ephemeral profile directory.  Do not
+  // add --incognito: it prevents Chromium from using that profile consistently
+  // and Google Meet can redirect the resulting guest session to its public
+  // landing page instead of the meeting lobby.
   "--no-sandbox",
   "--disable-setuid-sandbox",
   "--disable-features=IsolateOrigins,site-per-process",

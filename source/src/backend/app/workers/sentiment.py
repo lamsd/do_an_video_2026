@@ -36,6 +36,7 @@ def configured_classifier() -> SentimentClassifier:
 
 async def process(run_id: UUID, classifier: SentimentClassifier | None = None) -> None:
     classifier = classifier or configured_classifier()
+    runtime_preprocessing_version = get_settings().preprocessing_version
     async with SessionLocal() as db:
         run = await db.get(AnalysisRun, run_id)
         if run is None or run.status == "succeeded":
@@ -61,6 +62,29 @@ async def process(run_id: UUID, classifier: SentimentClassifier | None = None) -
                 run_id,
                 run.model_version,
                 classifier.model_version,
+            )
+            return
+        if run.preprocessing_version != runtime_preprocessing_version:
+            # Language routing and unit construction are part of preprocessing,
+            # not merely a UI label.  A worker with a different pipeline must
+            # not create evidence under the run's recorded version.
+            run.status = "failed"
+            run.error_code = "preprocessing_runtime_mismatch"
+            run.finished_at = datetime.now(UTC)
+            db.add(
+                OutboxEvent(
+                    dedupe_key=f"analysis:{run.id}:failed",
+                    event_type="analysis.sentiment.failed",
+                    meeting_id=run.meeting_id,
+                    payload={"analysis_run_id": str(run.id), "error_code": run.error_code},
+                )
+            )
+            await db.commit()
+            log.warning(
+                "analysis run %s expects preprocessing %s but worker has %s",
+                run_id,
+                run.preprocessing_version,
+                runtime_preprocessing_version,
             )
             return
         try:

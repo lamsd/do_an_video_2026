@@ -112,8 +112,8 @@ show_status() {
   printf '%-32s %s\n' "MODEL_ARTIFACT_DIR" "$(is_configured MODEL_ARTIFACT_DIR && echo configured || echo not-required-or-missing)"
   printf '%-32s %s\n' "MODEL_ARTIFACT_SHA256" "$(is_configured MODEL_ARTIFACT_SHA256 && echo configured || echo not-required-or-missing)"
   printf '%-32s %s\n' "CLASSIFIER_ADAPTER" "$(config_value_or_default CLASSIFIER_ADAPTER rules)"
-  printf '%-32s %s\n' "MODEL_VERSION" "$(config_value_or_default MODEL_VERSION baseline-rules-v2)"
-  printf '%-32s %s\n' "PREPROCESSING_VERSION" "$(config_value_or_default PREPROCESSING_VERSION 2026-09-v1)"
+  printf '%-32s %s\n' "MODEL_VERSION" "$(config_value_or_default MODEL_VERSION baseline-rules-v3)"
+  printf '%-32s %s\n' "PREPROCESSING_VERSION" "$(config_value_or_default PREPROCESSING_VERSION 2026-11-stt-quality-gate-v2)"
   printf '%-32s %s\n' "SENTIMENT_CONFIDENCE_THRESHOLD" "$(config_value_or_default SENTIMENT_CONFIDENCE_THRESHOLD 0.60)"
   echo "Secret values, API URLs and artifact paths are intentionally not printed."
 }
@@ -164,9 +164,9 @@ configure_model() {
   prompt_value "Classifier adapter (rules or tfidf-logreg)" "${current_adapter:-rules}"
   adapter=$entered_value
   case "$adapter" in rules|tfidf-logreg) ;; *) echo "Only rules or tfidf-logreg is supported." >&2; exit 1 ;; esac
-  prompt_value "Model version" "${current_version:-baseline-rules-v2}"
+  prompt_value "Model version" "${current_version:-baseline-rules-v3}"
   model_version=$entered_value
-  prompt_value "Preprocessing version" "${current_preprocessing:-2026-09-v1}"
+  prompt_value "Preprocessing version" "${current_preprocessing:-2026-11-stt-quality-gate-v2}"
   preprocessing_version=$entered_value
   prompt_value "Sentiment confidence threshold (0 to 1)" "${current_threshold:-0.60}"
   threshold=$entered_value

@@ -1,0 +1,9 @@
+# Apply the locally tested Google Meet join fix without rebuilding the full
+# browser/runtime base image.  The published v012 image already contains the
+# same workspace layout; only @vexa/join's compiled module changes here.
+FROM vexaai/vexa-bot:v012
+
+COPY core/meetings/modules/join/dist /app/core/meetings/modules/join/dist
+
+ARG VEXA_IMAGE_VERSION=local-gmeet-selector-fix
+ENV VEXA_IMAGE_VERSION=${VEXA_IMAGE_VERSION}

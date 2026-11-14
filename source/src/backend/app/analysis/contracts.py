@@ -8,6 +8,7 @@ class QualityDecision:
     reasons: list[str]
     normalized_text: str
     language: str
+    language_source: str
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class UnitDraft:
     segment_ids: list[str]
     text: str
     language: str
+    language_source: str
     token_count: int
     start_at: datetime
     end_at: datetime
@@ -31,3 +33,4 @@ class Prediction:
     probabilities: dict[str, float]
     polarity_score: float | None
     inference_ms: int
+    abstention_reason: str | None = None

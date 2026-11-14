@@ -18,6 +18,10 @@ def test_run_metrics_keeps_operational_coverage_and_batch_duration_distinct():
         "effective_coverage": 0.6,
         "coverage": 0.75,
         "inference_total_ms": 37,
+        "language_unit_counts": {},
+        "accepted_language_counts": {},
+        "predicted_language_counts": {},
+        "abstention_reason_counts": {},
     }
 
 
@@ -32,3 +36,23 @@ def test_run_metrics_handles_an_empty_transcript_without_a_division_error():
     assert metrics["acceptance_rate"] == 0
     assert metrics["prediction_coverage"] == 0
     assert metrics["effective_coverage"] == 0
+
+
+def test_run_metrics_keeps_language_and_abstention_counts_separate_from_coverage():
+    metrics = run_metrics(
+        total_units=5,
+        accepted_units=5,
+        predicted_units=2,
+        inference_total_ms=13,
+        language_unit_counts={"vi": 2, "en": 2, "mixed": 1},
+        accepted_language_counts={"vi": 2, "en": 2, "mixed": 1},
+        predicted_language_counts={"vi": 2},
+        abstention_reason_counts={
+            "unsupported_language": 2,
+            "mixed_language_requires_multilingual_model": 1,
+        },
+    )
+
+    assert metrics["prediction_coverage"] == 0.4
+    assert metrics["language_unit_counts"] == {"vi": 2, "en": 2, "mixed": 1}
+    assert metrics["abstention_reason_counts"]["unsupported_language"] == 2

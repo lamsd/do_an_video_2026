@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 import socket
+from urllib.parse import quote
 
 # Dependency-free by design (no SQLAlchemy) so this module stays importable in the offline gate
 # venv — see `schema/errors.py`.
@@ -80,7 +81,12 @@ async def _connect_with_retry(
 
 
 def _database_url() -> str:
-    """Async Postgres URL from the 0.11 DB_* env names (asyncpg driver for the async engine)."""
+    """Build an async Postgres URL from ``DB_*`` values.
+
+    Compose secrets are opaque strings and may contain reserved URI characters such
+    as ``@`` or ``:``.  Quote individual URI components rather than interpolating
+    them directly; otherwise asyncpg reads part of a valid password as URL syntax.
+    """
     explicit = os.getenv("DATABASE_URL")
     if explicit:
         return explicit
@@ -89,7 +95,10 @@ def _database_url() -> str:
     name = os.getenv("DB_NAME", "vexa")
     user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD", "postgres")
-    return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{name}"
+    return (
+        "postgresql+asyncpg://"
+        f"{quote(user, safe='')}:{quote(password, safe='')}@{host}:{port}/{quote(name, safe='')}"
+    )
 
 
 def build_production_app():

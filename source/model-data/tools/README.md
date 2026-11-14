@@ -24,7 +24,9 @@ python3 source/model-data/tools/build_uit_vsmec_proxy.py \
   --smoke-test
 ```
 
-Các file CSV có schema `text,label,meeting_id` để tương thích notebook hiện tại.
+Các file CSV có schema `text,label,meeting_id,language`; proxy ghi cố định
+`language=vi` vì nguồn UIT-VSMEC là tiếng Việt. Đây chỉ là metadata để kiểm tra
+contract, không làm proxy trở thành corpus transcript họp.
 `meeting_id` có prefix `proxy-vsmec-` và là ID tổng hợp theo từng dòng, **không
 phải** meeting ID. Manifest ghi rõ hạn chế này. Không dùng metrics từ proxy cho
 Chương 8, không nạp artifact tạo ra từ proxy vào runtime và không coi proxy là

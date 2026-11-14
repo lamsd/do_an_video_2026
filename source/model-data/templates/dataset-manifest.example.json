@@ -9,6 +9,8 @@
   "annotation_policy": "Hai annotator độc lập, adjudication cho bất đồng, lưu agreement aggregate.",
   "split_policy": "Chia theo meeting_id trước tuning; một meeting chỉ thuộc một split; test bị khoá.",
   "meeting_id_policy": "ID nội bộ ổn định, không chứa tên người hoặc meeting URL.",
+  "language_policy": "Dùng duy nhất vi, en hoặc mixed; ghi ngôn ngữ của analysis unit sau review.",
+  "code_switch_policy": "mixed chỉ dùng cho unit có cả tín hiệu Việt và Anh; không trộn vào model đơn ngữ khi chưa có protocol riêng.",
   "output_sha256": {
     "train": "<sha256-của-train.csv>",
     "validation": "<sha256-của-validation.csv>",

@@ -1,19 +1,40 @@
 # =============================================================================
-# Transcription service (separate GPU deploy unit). Copy to .env:  cp .env.example .env
+# Transcription service. Copy to .env:
+#   cp ".env copy.example" .env
 # =============================================================================
 
 # Host port the nginx load balancer publishes (the stack points TRANSCRIPTION_SERVICE_URL here).
 TRANSCRIPTION_LB_PORT=8083
 
 # Model. Multilingual: tiny · base · small · medium · large-v2 · large-v3 · large-v3-turbo
-# GPU recommendation: large-v3-turbo + int8 (~2.1 GB VRAM, >10x real-time, 99+ langs).
-MODEL_SIZE=large-v3-turbo
+# `small` is the safe default for docker-compose.cpu.yml. Use large-v3-turbo
+# only with CUDA; medium/large models on CPU cannot keep up with live meeting
+# audio and cause repeated 503 "Service busy" responses.
+MODEL_SIZE=small
 
 # int8 (default; 50-60% VRAM cut, minimal accuracy loss) · float16 (GPU only, fastest, more VRAM)
 COMPUTE_TYPE=int8
 
 # CPU only (docker-compose.cpu.yml): physical cores, 0 = auto-detect.
+# A 6-core CPU host can set this to 6. GPU deployments ignore it.
 CPU_THREADS=0
+
+# CPU-only optional overload guard. On a constrained host, set this to 1 so
+# one transcription finishes before the next begins. Leave commented for the
+# device-aware service default (2 for CPU, 20 for CUDA).
+# MAX_ACTIVE_REQUESTS=1
+
+# Quality gates for raw WebRTC audio. CPU defaults are conservative; lower the
+# values only after checking real transcript quality, not to force noisy text.
+VAD_FILTER_THRESHOLD=0.65
+VAD_MIN_SILENCE_DURATION_MS=400
+VAD_MAX_SPEECH_DURATION_S=20
+MIN_AUDIO_DURATION_S=1.0
+MIN_TRANSCRIPT_DURATION_S=1.0
+MIN_TRANSCRIPT_WORDS=3
+# Do not feed a previous live result into the next STT window by default.
+USE_REQUEST_PROMPT=false
+MIN_AUTO_LANGUAGE_PROBABILITY=0.45
 
 # Image tag built for the worker.
 IMAGE_TAG=dev

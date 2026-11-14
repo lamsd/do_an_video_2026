@@ -15,7 +15,7 @@ everywhere, and lets the GPU tier scale (add workers) and relocate independently
 ## Run
 
 ```bash
-cp .env.example .env          # set MODEL_SIZE, API_TOKEN, TRANSCRIPTION_LB_PORT
+cp ".env copy.example" .env  # set MODEL_SIZE, API_TOKEN, TRANSCRIPTION_LB_PORT
 docker compose up -d          # GPU (nvidia-container-toolkit required)
 # or, no GPU:
 docker compose -f docker-compose.cpu.yml up -d
@@ -23,6 +23,17 @@ docker compose -f docker-compose.cpu.yml up -d
 docker compose logs -f        # wait for "Model loaded successfully"
 curl http://localhost:8083/health
 ```
+
+### CPU-only realtime meetings
+
+For `docker-compose.cpu.yml`, use `MODEL_SIZE=small` (or `base` on a slower
+machine), not `medium` or `large-v3-turbo`. Large models on CPU can take longer
+than the live audio window, causing the bot to receive `503 Service busy` and
+leaving the dashboard with no transcript. On a six-core CPU, set
+`CPU_THREADS=6`; if the service is still saturated, set `MAX_ACTIVE_REQUESTS=1`.
+
+For a CUDA deployment, `large-v3-turbo` remains the recommended model and the
+CPU-specific `MAX_ACTIVE_REQUESTS=1` setting should be omitted.
 
 The nginx LB publishes port `8083` (`TRANSCRIPTION_LB_PORT`); it least-conn balances across
 workers. Ships with one worker — scale out by uncommenting `transcription-worker-2/3` in

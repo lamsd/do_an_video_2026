@@ -52,9 +52,9 @@ setting() {
 model_version=$(setting MODEL_VERSION)
 classifier_adapter=$(setting CLASSIFIER_ADAPTER)
 preprocessing_version=$(setting PREPROCESSING_VERSION)
-[ -n "$model_version" ] || model_version=baseline-rules-v2
+[ -n "$model_version" ] || model_version=baseline-rules-v3
 [ -n "$classifier_adapter" ] || classifier_adapter=rules
-[ -n "$preprocessing_version" ] || preprocessing_version=2026-09-v1
+[ -n "$preprocessing_version" ] || preprocessing_version=2026-11-stt-quality-gate-v2
 {
   printf '%s\n\n' '# Evidence manifest'
   printf '%s\n' "- Evidence ID: \`$evidence_id\`"

@@ -172,15 +172,12 @@ console.log("\nTest 4: X11Input command emission (dryRun)");
       selectorsSrc.indexOf("googleNameInputSelectors"),
       selectorsSrc.indexOf("googleMeetingContainerSelectors")
     );
-    const nameStructIdx = Math.min(
-      ...["input[jsname]", 'input[type="text"]:not('].map((s) => {
-        const i = nameBlock.indexOf(s);
-        return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-      })
-    );
+    const nameStructIdx = nameBlock.indexOf("input[jsname]");
     const nameEnglishIdx = nameBlock.indexOf('aria-label="Your name"');
-    assert(nameStructIdx !== Number.MAX_SAFE_INTEGER, "name selectors include a locale-agnostic structural selector");
+    assert(nameStructIdx >= 0, "name selectors include a locale-agnostic structural selector");
     assert(nameStructIdx < nameEnglishIdx, "locale-agnostic name selector precedes the English aria-label fallback");
+    assert(!nameBlock.includes('input[type="text"]:not('),
+      "name selectors never use a bare text input that can match Meet's public marketing form");
 
     // (c) DOM match: build a Hungarian lobby (no English text anywhere) and
     // confirm the FIRST (locale-agnostic) join + name selectors match it via a

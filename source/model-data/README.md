@@ -14,15 +14,19 @@ approved/<dataset-version>/test.csv
 approved/<dataset-version>/dataset-manifest.json
 ```
 
-Mỗi tệp cho notebook/script PhoBERT bắt buộc có ba cột `text,label,meeting_id`.
-`label` chỉ là `negative`, `neutral` hoặc `positive`; `meeting_id` phải là ID
-meeting thật khi đánh giá corpus transcript họp để script có thể chặn leakage giữa
-các split.
+Mỗi tệp cho corpus họp được phê duyệt bắt buộc có bốn cột
+`text,label,meeting_id,language`. `language` chỉ nhận `vi`, `en` hoặc `mixed`;
+đó là nhãn ngôn ngữ đã review ở cấp analysis unit, không phải suy đoán lại từ
+text tại thời điểm train. `label` chỉ là `negative`, `neutral` hoặc `positive`;
+`meeting_id` phải là ID meeting thật khi đánh giá corpus transcript họp để script
+có thể chặn leakage giữa các split. Không đưa unit `unknown` vào corpus train;
+với `mixed`, chỉ train khi có protocol và model đa ngôn ngữ được đánh giá riêng.
 
 `dataset-manifest.json` bắt buộc có `dataset_kind` là
 `consented-meeting-transcript-sentiment`, version dataset, nguồn,
 `license_or_consent`, thời gian thu thập, rule redaction, phiên bản guideline
-nhãn, annotation/adjudication policy, split policy, meeting-ID policy và
+nhãn, annotation/adjudication policy, split policy, meeting-ID policy,
+`language_policy`, `code_switch_policy` và
 `output_sha256` cho cả ba CSV. Gate kiểm tra hash trước khi train.
 Khởi tạo manifest từ
 [`templates/dataset-manifest.example.json`](templates/dataset-manifest.example.json),
@@ -45,7 +49,7 @@ không ghi text nguồn.
 ```
 
 Gate dừng khi thiếu manifest/hash, schema, ba nhãn, exact-text leakage hoặc
-meeting-ID leakage. Cảnh báo về độ dài và số meeting được lưu trong report để
+meeting-ID leakage. Báo cáo cũng tách số unit theo ngôn ngữ. Cảnh báo về độ dài và số meeting được lưu trong report để
 review trước khi train.
 
 Ví dụ huấn luyện:
@@ -58,6 +62,7 @@ uv run python scripts/train_tfidf_logreg.py \
   --test ../../model-data/approved/<dataset-version>/test.csv \
   --dataset-manifest ../../model-data/approved/<dataset-version>/dataset-manifest.json \
   --dataset-version <dataset-version> \
+  --language vi \
   --model-version tfidf-logreg-<dataset-version>-v1 \
   --output ../../model-artifacts/tfidf-logreg-<dataset-version>-v1
 ```
@@ -79,7 +84,7 @@ Artifact là file `joblib` và chỉ được nạp từ nguồn tin cậy đã 
 
 [`colab/train_meeting_sentiment_phobert.py`](colab/train_meeting_sentiment_phobert.py)
 là script fine-tune PhoBERT cho một corpus transcript họp đã được phê duyệt. Script
-bắt buộc các cột `text,label,meeting_id`, chặn meeting/text trùng giữa các split,
+kiểm tra các cột `text,label,meeting_id,language`, chặn meeting/text trùng giữa các split,
 kiểm tra manifest/hash trước khi tải model, calibrate trên validation và chọn
 ngưỡng `unknown` trước khi đánh giá test. Nó chỉ tạo artifact và báo cáo đánh giá;
 backend hiện chưa có adapter serving PhoBERT.

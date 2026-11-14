@@ -187,6 +187,9 @@ def build_split(
                 # This explicit prefix prevents callers from treating it as a real
                 # meeting identifier in manifests or evaluation reports.
                 "meeting_id": f"proxy-vsmec-{split}-{row_number:05d}",
+                # UIT-VSMEC is Vietnamese text. This remains a proxy smoke
+                # dataset and must never be used as evidence for meetings.
+                "language": "vi",
             }
         )
 
@@ -205,7 +208,7 @@ def build_split(
 
 def write_csv(path: Path, records: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id"])
+        writer = csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id", "language"])
         writer.writeheader()
         writer.writerows(records)
 

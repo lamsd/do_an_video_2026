@@ -7,7 +7,6 @@ services:
       context: ./src/backend
     env_file: settings.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in settings.env}@postgres:5432/${POSTGRES_DB:-meeting}
       REDIS_URL: redis://valkey:6379/0
     ports:
       - "127.0.0.1:${API_PORT:-8088}:8088"
@@ -34,7 +33,6 @@ services:
     command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.sentiment"]
     env_file: settings.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-meeting}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in settings.env}@postgres:5432/${POSTGRES_DB:-meeting}
       REDIS_URL: redis://valkey:6379/0
     depends_on:
       postgres:

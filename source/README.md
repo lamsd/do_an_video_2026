@@ -81,7 +81,7 @@ Sau khi chỉ thay `settings.env`, bắt buộc recreate container vì `docker c
 ./scripts/verify.sh
 ```
 
-`apply` chạy kiểm tra Compose, build image hiện tại và force-recreate `backend`, `worker`, `dashboard`; PostgreSQL và Valkey giữ nguyên volume. Browser không được quyền ghi `settings.env` hoặc điều khiển Docker socket. Tích hợp mới phải được thêm vào registry backend `app/api/operator_settings.py` với trạng thái/boolean an toàn, và xử lý secret qua script cục bộ hoặc secret manager.
+`apply` chạy kiểm tra Compose, build image hiện tại và force-recreate `backend`, `worker`, `dashboard`; PostgreSQL và Valkey giữ nguyên volume. Ở `APP_ENV=development`, Dashboard có thể gửi một form allow-list tới `operator-runner` nội bộ để lưu Vexa key/model và recreate đúng ba service này. Browser không có shell/Docker socket trực tiếp, runner không mở port và không nhận lệnh tùy ý. Tích hợp mới phải được thêm vào registry backend `app/api/operator_settings.py` với trạng thái/boolean an toàn, và xử lý secret qua runner cục bộ hoặc secret manager.
 
 Xem [hướng dẫn cài đặt và chạy theo từng bước](../docs/operations/SETTINGS_AND_RUN_GUIDE.md) để khởi tạo lần đầu, rotate API key, cấu hình model, build/restart, kiểm chứng và chạy Google Meet test.
 
@@ -220,7 +220,7 @@ Thực hiện theo thứ tự:
 5. Vexa contract: spawn/read transcript/stop, webhook valid/tampered/replay và delivery ledger.
 6. E2E: bot -> transcript -> analysis -> SSE -> Dashboard; restart backend/worker không mất data.
 
-Không dùng transcript cuộc họp thật trong Git, fixture hoặc CI logs. Real-meeting test cần consent người tham gia. Baseline hiện hành là `baseline-rules-v2`; không ghi là PhoBERT cho đến khi có artifact versioned và báo cáo đánh giá.
+Không dùng transcript cuộc họp thật trong Git, fixture hoặc CI logs. Real-meeting test cần consent người tham gia. Baseline hiện hành là `baseline-rules-v3` (rule-based Việt–Anh); không ghi là PhoBERT cho đến khi có artifact versioned và báo cáo đánh giá.
 
 ## Model sentiment cho pilot
 

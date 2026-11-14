@@ -17,15 +17,15 @@ from meeting_dataset_quality import evaluate_dataset, sha256_file
 
 def write_split(path: Path, prefix: str) -> None:
     rows = [
-        {"text": f"{prefix} văn bản tiêu cực một", "label": "negative", "meeting_id": f"{prefix}-a"},
-        {"text": f"{prefix} văn bản trung tính một", "label": "neutral", "meeting_id": f"{prefix}-a"},
-        {"text": f"{prefix} văn bản tích cực một", "label": "positive", "meeting_id": f"{prefix}-a"},
-        {"text": f"{prefix} văn bản tiêu cực hai", "label": "negative", "meeting_id": f"{prefix}-b"},
-        {"text": f"{prefix} văn bản trung tính hai", "label": "neutral", "meeting_id": f"{prefix}-b"},
-        {"text": f"{prefix} văn bản tích cực hai", "label": "positive", "meeting_id": f"{prefix}-b"},
+        {"text": f"{prefix} văn bản tiêu cực một", "label": "negative", "meeting_id": f"{prefix}-a", "language": "vi"},
+        {"text": f"{prefix} văn bản trung tính một", "label": "neutral", "meeting_id": f"{prefix}-a", "language": "vi"},
+        {"text": f"{prefix} văn bản tích cực một", "label": "positive", "meeting_id": f"{prefix}-a", "language": "vi"},
+        {"text": f"{prefix} văn bản tiêu cực hai", "label": "negative", "meeting_id": f"{prefix}-b", "language": "vi"},
+        {"text": f"{prefix} văn bản trung tính hai", "label": "neutral", "meeting_id": f"{prefix}-b", "language": "vi"},
+        {"text": f"{prefix} văn bản tích cực hai", "label": "positive", "meeting_id": f"{prefix}-b", "language": "vi"},
     ]
     with path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id"])
+        writer = csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id", "language"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -42,6 +42,8 @@ def write_manifest(path: Path, splits: dict[str, Path], version: str = "meeting-
         "annotation_policy": "two annotators and adjudication",
         "split_policy": "split by meeting_id",
         "meeting_id_policy": "stable internal meeting IDs",
+        "language_policy": "canonical vi/en/mixed values",
+        "code_switch_policy": "mixed units are reviewed separately",
         "output_sha256": {name: sha256_file(value) for name, value in splits.items()},
     }
     path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -74,8 +76,8 @@ class MeetingDatasetQualityTests(unittest.TestCase):
             for name, path in paths.items():
                 write_split(path, name)
             with paths["test"].open("a", encoding="utf-8", newline="") as stream:
-                csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id"]).writerow(
-                    {"text": "train văn bản tiêu cực một", "label": "negative", "meeting_id": "test-c"}
+                csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id", "language"]).writerow(
+                    {"text": "train văn bản tiêu cực một", "label": "negative", "meeting_id": "test-c", "language": "vi"}
                 )
             manifest_path = root / "dataset-manifest.json"
             write_manifest(manifest_path, paths)
@@ -98,8 +100,8 @@ class MeetingDatasetQualityTests(unittest.TestCase):
             manifest_path = root / "dataset-manifest.json"
             write_manifest(manifest_path, paths)
             with paths["train"].open("a", encoding="utf-8", newline="") as stream:
-                csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id"]).writerow(
-                    {"text": "train bản ghi sau khi tạo manifest", "label": "positive", "meeting_id": "train-c"}
+                csv.DictWriter(stream, fieldnames=["text", "label", "meeting_id", "language"]).writerow(
+                    {"text": "train bản ghi sau khi tạo manifest", "label": "positive", "meeting_id": "train-c", "language": "vi"}
                 )
 
             _, report = evaluate_dataset(
@@ -128,6 +130,30 @@ class MeetingDatasetQualityTests(unittest.TestCase):
 
             self.assertFalse(report["ready_to_train"])
             self.assertTrue(any("missing required column(s)" in issue for issue in report["blocking_issues"]))
+
+    def test_unknown_language_blocks_approved_meeting_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = {name: root / f"{name}.csv" for name in ("train", "validation", "test")}
+            for name, path in paths.items():
+                write_split(path, name)
+            with paths["train"].open("a", encoding="utf-8", newline="") as stream:
+                csv.DictWriter(
+                    stream, fieldnames=["text", "label", "meeting_id", "language"]
+                ).writerow(
+                    {"text": "sample unknown language", "label": "neutral", "meeting_id": "train-c", "language": "unknown"}
+                )
+            manifest_path = root / "dataset-manifest.json"
+            write_manifest(manifest_path, paths)
+
+            _, report = evaluate_dataset(
+                paths,
+                manifest_path=manifest_path,
+                expected_dataset_version="meeting-test-v1",
+            )
+
+            self.assertFalse(report["ready_to_train"])
+            self.assertTrue(any("language must be one of" in issue for issue in report["blocking_issues"]))
 
 
 if __name__ == "__main__":

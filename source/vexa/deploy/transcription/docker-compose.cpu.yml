@@ -29,6 +29,18 @@ services:
       - DEVICE=cpu
       - COMPUTE_TYPE=int8
       - CPU_THREADS=${CPU_THREADS:-0}
+      # Conservative speech boundaries reduce fragmented noise windows on
+      # Jitsi's raw WebRTC capture. These can be overridden in .env.
+      - MAX_ACTIVE_REQUESTS=${MAX_ACTIVE_REQUESTS:-2}
+      - VAD_FILTER=${VAD_FILTER:-true}
+      - VAD_FILTER_THRESHOLD=${VAD_FILTER_THRESHOLD:-0.65}
+      - VAD_MIN_SILENCE_DURATION_MS=${VAD_MIN_SILENCE_DURATION_MS:-400}
+      - VAD_MAX_SPEECH_DURATION_S=${VAD_MAX_SPEECH_DURATION_S:-20}
+      - MIN_AUDIO_DURATION_S=${MIN_AUDIO_DURATION_S:-1.0}
+      - MIN_TRANSCRIPT_DURATION_S=${MIN_TRANSCRIPT_DURATION_S:-1.0}
+      - MIN_TRANSCRIPT_WORDS=${MIN_TRANSCRIPT_WORDS:-3}
+      - USE_REQUEST_PROMPT=${USE_REQUEST_PROMPT:-false}
+      - MIN_AUTO_LANGUAGE_PROBABILITY=${MIN_AUTO_LANGUAGE_PROBABILITY:-0.45}
       - API_TOKEN=${API_TOKEN:-}
     volumes:
       - transcription-models:/app/models
