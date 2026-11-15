@@ -3,11 +3,11 @@
 Đây là entry point duy nhất của hệ thống Meeting Intelligence. Nó hiện thực kiến trúc trong `Reports/thesis_latex_overleaf/main.pdf`:
 
 ```text
-Google Meet -> Vexa -> FastAPI -> PostgreSQL/outbox -> Valkey Stream
-                                              -> sentiment worker -> SSE -> Dashboard
+Jitsi Meet -> Vexa bot -> local STT -> FastAPI -> PostgreSQL/outbox -> Valkey Stream
+                                                            -> sentiment worker -> SSE -> Dashboard
 ```
 
-Vexa là nhà cung cấp bot/transcript. Project sở hữu bản sao transcript, revision, phân tích sentiment, Dashboard và database riêng. PostgreSQL là source of truth; Valkey chỉ phục vụ queue/fan-out. Dashboard không gọi Vexa và không chứa API key.
+Dashboard và runbook hiện hành dùng Jitsi Meet; parser backend vẫn giữ tương thích Google Meet cho các run lịch sử nhưng Google Meet không được coi là đường E2E ổn định vì anonymous guest admission có thể bị chặn. Vexa là nhà cung cấp bot/transcript, còn STT local tạo segment từ audio theo cấu hình runtime. Project sở hữu bản sao transcript, revision, phân tích sentiment, Dashboard và database riêng. PostgreSQL là source of truth; Valkey chỉ phục vụ queue/fan-out. Dashboard không gọi Vexa và không chứa API key.
 
 ## Cấu trúc
 
@@ -83,7 +83,7 @@ Sau khi chỉ thay `settings.env`, bắt buộc recreate container vì `docker c
 
 `apply` chạy kiểm tra Compose, build image hiện tại và force-recreate `backend`, `worker`, `dashboard`; PostgreSQL và Valkey giữ nguyên volume. Ở `APP_ENV=development`, Dashboard có thể gửi một form allow-list tới `operator-runner` nội bộ để lưu Vexa key/model và recreate đúng ba service này. Browser không có shell/Docker socket trực tiếp, runner không mở port và không nhận lệnh tùy ý. Tích hợp mới phải được thêm vào registry backend `app/api/operator_settings.py` với trạng thái/boolean an toàn, và xử lý secret qua runner cục bộ hoặc secret manager.
 
-Xem [hướng dẫn cài đặt và chạy theo từng bước](../docs/operations/SETTINGS_AND_RUN_GUIDE.md) để khởi tạo lần đầu, rotate API key, cấu hình model, build/restart, kiểm chứng và chạy Google Meet test.
+Xem [hướng dẫn cài đặt và chạy theo từng bước](../docs/operations/SETTINGS_AND_RUN_GUIDE.md) và [checklist Jitsi E2E](../docs/operations/JITSI_E2E_VERIFICATION_CHECKLIST.md) để khởi tạo lần đầu, rotate API key, cấu hình model, build/restart, kiểm chứng và chạy Jitsi test.
 
 ### Tạo secrets và Vexa API key
 
@@ -240,4 +240,4 @@ Use case pilot duy nhất là retrospective sau cuộc họp: người vận hà
 
 ## Giới hạn MVP
 
-Không claim Zoom/Teams/Jitsi, direct Vexa WebSocket ingestion, JWT/OAuth, GPU benchmark, Kubernetes/HA, PhoBERT, auto-alert hoặc mental-health/HR scoring là đã triển khai. Đây là các giai đoạn sau, cần contract, consent và benchmark riêng.
+Không claim Google Meet/Zoom/Teams E2E ổn định, direct Vexa WebSocket ingestion, JWT/OAuth, GPU benchmark, Kubernetes/HA, PhoBERT, auto-alert, chất lượng dịch máy hoặc mental-health/HR scoring là đã triển khai. Jitsi hiện là đường demo/UAT và vẫn cần evidence redaction-safe cho từng run; các mở rộng cần contract, consent và benchmark riêng.

@@ -10,7 +10,7 @@ legacy_config="$vexa_dir/project.env"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/vexa-selfhost.sh <import-legacy-config|sync-transcription-config|check|start|status|verify|mint-token>
+Usage: ./scripts/vexa-selfhost.sh <import-legacy-config|sync-transcription-config|check|start|restart|status|verify|mint-token>
 
 Uses source/settings.env by default. Set MEETING_CONFIG_FILE to use another file.
 EOF
@@ -164,6 +164,10 @@ case "$action" in
     ;;
   start)
     (cd "$vexa_dir" && COMPOSE_PROJECT_NAME="$vexa_compose_project_name" docker compose --env-file "$config_file" -f compose.yaml up -d)
+    ;;
+  restart)
+    (cd "$vexa_dir" && COMPOSE_PROJECT_NAME="$vexa_compose_project_name" docker compose --env-file "$config_file" -f compose.yaml up -d --no-recreate)
+    (cd "$vexa_dir" && COMPOSE_PROJECT_NAME="$vexa_compose_project_name" docker compose --env-file "$config_file" -f compose.yaml restart)
     ;;
   status)
     (cd "$vexa_dir" && COMPOSE_PROJECT_NAME="$vexa_compose_project_name" docker compose --env-file "$config_file" -f compose.yaml ps)
