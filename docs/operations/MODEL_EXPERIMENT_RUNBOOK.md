@@ -4,7 +4,7 @@ Runbook này dành cho stack chuẩn ở `source/`. Nó không dùng ESP32, firm
 
 ## Phạm vi và điều kiện dừng
 
-- Google Meet + Vexa là integration platform đã có. Zoom, Teams hay Jitsi cần adapter, sandbox/API, consent và E2E evidence riêng trước khi được so sánh.
+- Jitsi Meet + Vexa + STT local là đường demo/UAT hiện hành. Google Meet còn tương thích ở API cho run lịch sử nhưng không là baseline E2E vì guest admission không ổn định; Zoom và Teams cần adapter, sandbox/API, consent và evidence riêng trước khi được so sánh.
 - Chỉ phân tích polarity transcript: `positive`, `neutral`, `negative`, `unknown`; không suy luận sức khỏe tâm thần hoặc đánh giá người tham gia.
 - Không đưa raw transcript, corpus được phê duyệt, artifact model hay `settings.env` vào Git.
 - Không đưa UIT-VSMEC proxy hay corpus phân loại trầm cảm vào kết quả benchmark transcript họp.
@@ -20,7 +20,9 @@ source/model-data/approved/<dataset-version>/test.csv
 source/model-data/approved/<dataset-version>/dataset-manifest.json
 ```
 
-Mỗi CSV bắt buộc có `text,label,meeting_id`. Split theo `meeting_id`, khóa test set trước tuning, hoàn thiện manifest/hash và chạy quality gate trước mọi trainer:
+Mỗi CSV corpus họp bắt buộc có `text,label,meeting_id,language`; `language` chỉ
+nhận `vi`, `en` hoặc `mixed`. Split theo `meeting_id`, khóa test set trước tuning,
+hoàn thiện manifest/hash và chạy quality gate trước mọi trainer:
 
 ```bash
 .venv/bin/python source/model-data/tools/check_meeting_dataset_quality.py \
@@ -39,7 +41,7 @@ Mỗi CSV bắt buộc có `text,label,meeting_id`. Split theo `meeting_id`, kh�
 
 | Biến thể | Trạng thái | Dùng để làm gì | Không được kết luận |
 | --- | --- | --- | --- |
-| `rules` / `baseline-rules-v2` | Có sẵn | Smoke test API → queue → worker → dashboard | Chất lượng sentiment |
+| `rules` / `baseline-rules-v3` | Có sẵn | Smoke test API → queue → worker → dashboard; routing Việt--Anh | Chất lượng sentiment hoặc chất lượng dịch máy |
 | `tfidf-logreg` | Có adapter, cần artifact đã duyệt | Baseline CPU tái lập trên corpus đã gán nhãn | Hiệu quả meeting nếu dùng corpus ngoài domain |
 | Checkpoint PhoBERT có sẵn | Chưa có adapter serving | Đối tượng benchmark sau khi thêm adapter/hash/label mapping | Không đổi config để gọi là đã chạy |
 
@@ -57,6 +59,7 @@ uv run python scripts/train_tfidf_logreg.py \
   --test ../../model-data/approved/<dataset-version>/test.csv \
   --dataset-manifest ../../model-data/approved/<dataset-version>/dataset-manifest.json \
   --dataset-version <dataset-version> \
+  --language vi \
   --model-version tfidf-logreg-<dataset-version>-v1 \
   --output ../../model-artifacts/tfidf-logreg-<dataset-version>-v1
 ```

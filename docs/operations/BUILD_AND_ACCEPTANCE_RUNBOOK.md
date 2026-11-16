@@ -1,28 +1,30 @@
 # Build lại và nghiệm thu MVP Meeting Intelligence
 
-> Cập nhật: 26/09/2026  
-> Phạm vi chốt: **Google Meet → Vexa → Meeting Intelligence → Dashboard**.  
-> Không đưa Jitsi, Chrome Extension, Ollama hoặc PhoBERT fine-tune vào đường găng trước khi MVP E2E pass.
+> Cập nhật: 15/11/2026
+> Phạm vi demo/UAT hiện hành: **Jitsi Meet → Vexa → STT local → Meeting Intelligence → Dashboard**.
+> Google Meet còn parser tương thích cho run lịch sử, nhưng không là đường E2E được nghiệm thu vì bot guest có thể bị chặn ở admission. Không đưa Chrome Extension, Ollama hoặc PhoBERT fine-tune vào đường găng trước khi MVP E2E pass.
+
+> Lệnh cài đặt/build chi tiết nằm ở [SETTINGS_AND_RUN_GUIDE.md](SETTINGS_AND_RUN_GUIDE.md). Tài liệu này giữ vai trò checklist nghiệm thu và quyết định phạm vi, không thay thế runbook cài đặt.
 
 ## 1. Đánh giá tổng thể
 
 | Hạng mục | Hiện trạng | Quyết định build |
 | --- | --- | --- |
-| Scope | Blueprint cũ nói Jitsi/Extension, implementation hiện tại dùng Google Meet/Dashboard | Luận văn và demo dùng Google Meet + Vexa; blueprint cũ chỉ là tài liệu tham khảo. |
+| Scope | Dashboard/runtime hiện hành dùng Jitsi + Vexa + STT local; parser API còn tương thích Google Meet lịch sử | Luận văn và demo dùng Jitsi; không tuyên bố E2E Google Meet thành công. |
 | Application stack | FastAPI, PostgreSQL, Valkey, worker, dashboard đã chạy | Giữ `source/compose.yaml` là entry point duy nhất. |
 | Vexa/STT | Vexa meetings-only và transcription đang chạy | Dùng Vexa như provider bot/transcript; không sửa core Vexa trong giai đoạn demo. |
-| AI | `baseline-rules-v1` đã đủ chứng minh pipeline | Không claim PhoBERT/accuracy khi chưa có dataset gán nhãn và report. |
+| AI | `baseline-rules-v3` là baseline Việt--Anh để kiểm pipeline | Không claim PhoBERT/accuracy hoặc chất lượng dịch máy khi chưa có dataset gán nhãn và report. |
 | Runtime | Task 1–3 đã pass, stack legacy vẫn song song | Chỉ dừng legacy sau xác nhận rõ ràng. |
-| E2E thật | Chưa chạy bằng Google Meet có consent | Đây là checkpoint bắt buộc tiếp theo. |
+| E2E thật | Cần lưu evidence Jitsi có consent và transcript final | Đây là checkpoint bắt buộc tiếp theo. |
 
 ## 2. Kiến trúc mục tiêu duy nhất
 
 ```text
-Google Meet
-  → Vexa meeting bot + transcription
+Jitsi Meet
+  → Vexa meeting bot + STT local
   → FastAPI (application ownership, webhook/polling, sync)
   → PostgreSQL (source of truth) + Valkey Stream (queue)
-  → sentiment worker (baseline-rules-v1)
+  → sentiment worker (baseline-rules-v3)
   → REST/SSE
   → static Dashboard
 ```
@@ -109,14 +111,14 @@ Script tạo dữ liệu tổng hợp tạm thời, kiểm API → queue → wor
 
 **Pass:** không nhầm URL, database hoặc dashboard giữa hai stack.
 
-### P6 — E2E Google Meet có consent
+### P6 — E2E Jitsi có consent
 
-1. Tạo một Google Meet test và nhận consent của người tham gia.
+1. Tạo hoặc vào một phòng Jitsi test và nhận consent của người tham gia.
 2. Mint/cấu hình API key Vexa nếu chưa có; không đưa key vào browser.
-3. Gọi `POST /v1/meetings`, admit bot và nói đoạn tiếng Việt test.
+3. Dán URL Jitsi vào Dashboard hoặc gọi `POST /v1/meetings`, rồi xác nhận bot xuất hiện trong danh sách participant. Không coi bước này là bypass quyền/phòng họp.
 4. Gọi `POST /v1/meetings/{id}/sync`; chỉ tiếp tục khi có segment `is_final=true`.
 5. Gọi `POST /v1/meetings/{id}/analysis?kind=final`.
-6. Mở Dashboard bằng **application UUID**, không dùng mã Google Meet.
+6. Mở Dashboard bằng **application UUID**, không dùng tên phòng Jitsi.
 7. Xác nhận overview, timeline, evidence, `unknown`, model version và SSE refresh.
 
 **Pass:** final run `succeeded`, evidence truy ngược transcript/timestamp và dashboard hiển thị đúng database application.
@@ -141,6 +143,6 @@ Script tạo dữ liệu tổng hợp tạm thời, kiểm API → queue → wor
 ## 5. Không làm trong giai đoạn build MVP
 
 - Không reset volume (`down -v`) để “sửa nhanh”.
-- Không tích hợp Jitsi/Zoom/Teams/Chrome Extension.
+- Không mở rộng sang Google Meet/Zoom/Teams/Chrome Extension trước khi có contract và evidence riêng.
 - Không fine-tune hoặc tuyên bố kết quả PhoBERT khi chưa có dataset consent, annotation guideline và evaluation report.
 - Không đưa token Vexa, password hay raw transcript vào dashboard, Git hoặc evidence.

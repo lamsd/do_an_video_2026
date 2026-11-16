@@ -7,10 +7,10 @@
 Phụ lục này mô tả artefact phần mềm tương ứng với các chương thiết kế, kiểm chứng và đạo đức. Nó không thay thế tài liệu vận hành trong thư mục \texttt{source/}, cũng không công bố kết quả thực nghiệm mới. Mục đích là giúp người đọc phân biệt giữa năng lực đã có trong MVP, điều kiện để tái lập một lần chạy, và các hạng mục chỉ mới ở mức hướng phát triển.
 
 \section{Phạm vi runtime hiện tại}
-Runtime của MVP là \texttt{baseline-rules-v2}. Luồng đã được hiện thực là:
+Runtime của MVP là \texttt{baseline-rules-v3}. Luồng đã được hiện thực là:
 
 \begin{center}
-\texttt{Google Meet $\rightarrow$ Vexa $\rightarrow$ FastAPI $\rightarrow$ PostgreSQL/outbox $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ SSE Dashboard}.
+\texttt{Jitsi Meet $\rightarrow$ Vexa $\rightarrow$ STT local $\rightarrow$ FastAPI $\rightarrow$ PostgreSQL/outbox $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ SSE Dashboard}.
 \end{center}
 
 Vexa là nhà cung cấp bot và transcript; dịch vụ của đề tài sở hữu bản sao transcript, revision, analysis run, prediction, aggregate và dashboard. PostgreSQL là nguồn dữ liệu chuẩn; Valkey Stream chỉ vận chuyển công việc cho worker và không thay thế lưu trữ bền vững. Dashboard chỉ gọi backend, không truy cập Vexa, PostgreSQL, Valkey hoặc API key.
@@ -22,8 +22,8 @@ Vexa là nhà cung cấp bot và transcript; dịch vụ của đề tài sở h
 \endhead
 \bottomrule
 \endfoot
-Nguồn họp & Google Meet qua Vexa & Teams, Zoom hoặc Jitsi đã tích hợp \\
-Classifier & Luật xác định \texttt{baseline-rules-v2} sau adapter & PhoBERT/custom model đã fine-tune hoặc tốt hơn baseline \\
+Nguồn họp & Jitsi Meet qua Vexa/STT local & Google Meet, Teams hoặc Zoom đã tích hợp \\
+Classifier & Luật xác định \texttt{baseline-rules-v3} sau adapter & PhoBERT/custom model đã fine-tune hoặc tốt hơn baseline \\
 Phân phối kết quả & REST analytics và SSE từ FastAPI tới dashboard & WebSocket, cảnh báo tự động hoặc quyết định tự động \\
 Hạ tầng & Docker Compose cục bộ, PostgreSQL, Valkey, backend, worker, Nginx dashboard & HA, autoscaling, Kubernetes, SLO/SLA hay production security hoàn chỉnh \\
 Quyền truy cập & \texttt{X-App-User-Id} phục vụ development; ownership được kiểm tra trong API & SSO, JWT/OIDC hoặc RBAC production \\
@@ -83,7 +83,7 @@ Các endpoint dưới đây phản ánh route trong mã nguồn tại thời đi
 \endfoot
 GET & \texttt{/health} & Liveness cơ bản của backend \\
 GET & \texttt{/ready} & Readiness; kiểm tra PostgreSQL và Valkey \\
-POST & \texttt{/v1/meetings} & Tạo meeting ứng dụng và yêu cầu Vexa spawn bot cho URL Google Meet hợp lệ \\
+POST & \texttt{/v1/meetings} & Tạo meeting ứng dụng và yêu cầu Vexa spawn bot cho URL Jitsi hợp lệ \\
 GET & \texttt{/v1/meetings?limit=...} & Danh sách meeting mới nhất của owner \\
 GET & \texttt{/v1/meetings/\{meeting\_id\}} & Trạng thái meeting thuộc owner \\
 POST & \texttt{/v1/meetings/\{meeting\_id\}/sync} & Reconcile transcript từ Vexa \\

@@ -1,5 +1,10 @@
 # Kế hoạch khôi phục runtime và nghiệm thu E2E
 
+> **Lưu ý cập nhật:** các tham chiếu Google Meet bên dưới là lịch sử. Khi khôi
+> phục runtime hiện hành, dùng Jitsi + Vexa + STT local theo
+> [BUILD_AND_ACCEPTANCE_RUNBOOK.md](BUILD_AND_ACCEPTANCE_RUNBOOK.md) và
+> [JITSI_E2E_VERIFICATION_CHECKLIST.md](JITSI_E2E_VERIFICATION_CHECKLIST.md).
+
 > Phạm vi: stack mới tại `source/compose.yaml`. Không xóa volume hay transcript trong kế hoạch này.
 > 
 > Nguyên tắc: không đưa giá trị trong `settings.env` hoặc token vào Git, tài liệu hay log.

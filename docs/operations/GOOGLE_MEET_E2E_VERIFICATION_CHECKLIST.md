@@ -1,5 +1,11 @@
 # Kịch bản chạy từng bước: Google Meet → Transcript → AI → Dashboard
 
+> **Đã thay thế cho vận hành mới:** Google Meet vẫn được giữ trong parser/API để
+> đọc các run lịch sử, nhưng guest admission không ổn định nên không là đường demo/UAT.
+> Dùng [checklist Jitsi E2E](JITSI_E2E_VERIFICATION_CHECKLIST.md) và
+> [kiến trúc Jitsi--Vexa--STT](../architecture/JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md)
+> cho thao tác hiện hành. Nội dung dưới đây chỉ để đối chiếu run Google cũ.
+
 > Mục tiêu: tự build lại toàn bộ stack, tạo một cuộc họp Google Meet có bot Vexa,
 > xác nhận transcript vào đúng database ứng dụng, chạy sentiment analysis và kiểm
 > tra kết quả trên Dashboard.

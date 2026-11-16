@@ -1,6 +1,6 @@
 # Khóa Luận LaTeX – Hướng Dẫn Sử Dụng
 
-> Luận văn hiện chỉ claim phần ứng dụng MVP đã kiểm chứng: ingest transcript, quality gate, classifier adapter, persistence và dashboard realtime. Không dùng kết quả notebook/model khác task để claim chất lượng sentiment.
+> Luận văn hiện chỉ claim phần ứng dụng MVP đã kiểm chứng: Jitsi Meet → Vexa → STT local → ingest transcript, quality gate, classifier adapter, persistence và dashboard realtime. Không dùng kết quả notebook/model khác task để claim chất lượng sentiment, ASR hoặc dịch máy. Kiến trúc và giới hạn runtime được cập nhật trong Chương 2--8; các nguồn Jitsi, Vexa và faster-whisper đã được trích dẫn trong `config/references.bib`.
 
 ## Thông tin đề tài
 
@@ -46,7 +46,7 @@ thesis_latex/
 2. Vào [overleaf.com](https://overleaf.com) → New Project → Upload Project
 3. Upload file ZIP
 4. Overleaf sẽ tự nhận diện `main.tex` làm file chính
-5. Chọn **Compiler**: `pdfLaTeX`
+5. Chọn **Compiler**: `XeLaTeX`
 6. Nhấn **Compile** (Ctrl+Enter)
 
 ---
@@ -54,7 +54,7 @@ thesis_latex/
 ## Cài đặt Overleaf cho tiếng Việt
 
 Trong Overleaf Menu (biểu tượng hamburger góc trên trái):
-- **Compiler**: pdfLaTeX
+- **Compiler**: XeLaTeX
 - **TeX Live version**: 2023 (hoặc mới nhất)
 
 Packages tiếng Việt đã được include trong `main.tex`:
@@ -96,10 +96,10 @@ Chỉ thêm số liệu model, ASR, latency hoặc tải khi có log/artefact đ
 
 ```bash
 # Yêu cầu: TeX Live 2023+ với gói tiếng Việt
-pdflatex main.tex
+xelatex main.tex
 bibtex main
-pdflatex main.tex
-pdflatex main.tex
+xelatex main.tex
+xelatex main.tex
 ```
 
 ---

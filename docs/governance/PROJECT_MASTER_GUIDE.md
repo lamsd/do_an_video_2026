@@ -1,6 +1,6 @@
 # Tài liệu tổng hợp — Meeting Intelligence MVP
 
-> Cập nhật: 26/09/2026  
+> Cập nhật: 14/11/2026
 > Nguồn hợp nhất: runbook Crossnote, `source/README.md`, `source/SELFHOST_CONFIGURATION.md`, `RUNTIME_RECOVERY_TASKS.md`, `BUILD_AND_ACCEPTANCE_RUNBOOK.md` và mã nguồn hiện tại.
 
 ## 1. Mục tiêu và phạm vi chốt
@@ -10,20 +10,20 @@ Hệ thống phân tích **sắc thái của transcript cuộc họp**, không s
 Luồng MVP:
 
 ```text
-Google Meet → Vexa bot + transcription → FastAPI
+Jitsi Meet → Vexa bot + STT local → FastAPI
            → PostgreSQL + Valkey Stream → sentiment worker
            → REST/SSE → Dashboard
 ```
 
 Phạm vi demo/khóa luận:
 
-- Nền tảng: Google Meet qua Vexa.
+- Nền tảng demo/UAT: Jitsi Meet qua Vexa và STT local. Parser API còn tương thích Google Meet cho run lịch sử, nhưng Google Meet không được coi là E2E pass vì anonymous guest admission không ổn định.
 - Nhãn: `positive`, `neutral`, `negative`, `unknown`.
-- Model hiện tại: `baseline-rules-v1`, chỉ để xác minh pipeline; không phải PhoBERT đã được benchmark.
+- Model hiện tại: `baseline-rules-v3`, chỉ để xác minh pipeline và routing Việt--Anh; không phải PhoBERT đã được benchmark.
 - PostgreSQL là source of truth; Valkey phục vụ queue/realtime.
-- Dashboard dùng application UUID, không dùng mã phòng Google Meet.
+- Dashboard dùng application UUID, không dùng tên/mã phòng Jitsi.
 
-Ngoài phạm vi trước khi MVP E2E hoàn thành: Jitsi, Zoom, Teams, Chrome Extension, Ollama, fine-tune PhoBERT và triển khai production/HA.
+Ngoài phạm vi trước khi MVP E2E hoàn thành: Google Meet, Zoom, Teams, Chrome Extension, Ollama, fine-tune PhoBERT và triển khai production/HA.
 
 ## 2. Trạng thái đã xác minh
 
@@ -35,7 +35,7 @@ Ngoài phạm vi trước khi MVP E2E hoàn thành: Jitsi, Zoom, Teams, Chrome E
 | Stack mới: worker | Running |
 | `/ready` và dashboard | Pass |
 | Smoke test API → queue → worker → analytics | Pass với fixture tổng hợp, auto-cleanup |
-| E2E Google Meet + transcript có consent | Chưa chạy |
+| E2E Jitsi + transcript có consent | Cần evidence đã redaction; không suy diễn từ test Google Meet lịch sử |
 | Stack legacy | Vẫn đang chạy song song, không dùng để demo |
 
 Port hiện tại:
@@ -136,9 +136,9 @@ Script tạo fixture tổng hợp, chạy API → Redis Stream → worker → an
 PASS: synthetic fixture completed API -> queue -> worker -> analytics API.
 ```
 
-### Bước 5 — E2E Google Meet có consent
+### Bước 5 — E2E Jitsi có consent
 
-1. Tạo một Google Meet test và có consent người tham gia.
+1. Tạo hoặc vào một phòng Jitsi test và có consent người tham gia.
 2. Nếu chưa có key Vexa, chạy `./scripts/vexa-selfhost.sh mint-token`, sau đó dán token vào `VEXA_API_KEY` trong `settings.env` — không log/token commit.
 3. Tạo meeting qua API:
 
@@ -146,10 +146,10 @@ PASS: synthetic fixture completed API -> queue -> worker -> analytics API.
 curl --fail --show-error -X POST http://127.0.0.1:8089/v1/meetings \
   -H 'Content-Type: application/json' \
   -H 'X-App-User-Id: local-dev' \
-  -d '{"meeting_url":"https://meet.google.com/<room-code>","bot_name":"Meeting Assistant"}'
+  -d '{"meeting_url":"https://meet.jit.si/<room-name>","bot_name":"Meeting Assistant","transcription_language":"vi"}'
 ```
 
-4. Lưu `id` trả về làm `<MEETING_ID>`, admit bot và nói một số câu tiếng Việt.
+4. Lưu `id` trả về làm `<MEETING_ID>`, xác nhận bot xuất hiện trong danh sách participant và nói một số câu tiếng Việt rõ ràng.
 5. Sync transcript:
 
 ```bash
@@ -178,7 +178,7 @@ curl --fail --show-error -X POST 'http://127.0.0.1:8089/v1/meetings/<MEETING_ID>
 - [ ] `./scripts/vexa-selfhost.sh verify` pass.
 - [ ] `./scripts/smoke-analysis-pipeline.sh` pass.
 - [ ] Chỉ dùng port stack mới `8089`/`3001`.
-- [ ] Meeting test có consent và bot được admit.
+- [ ] Meeting Jitsi test có consent và bot xuất hiện trong participant list.
 - [ ] Có transcript finalized trước khi yêu cầu final analysis.
 - [ ] Dashboard dùng application UUID đúng.
 - [ ] Log/ảnh đã che secret, PII và raw transcript không cần thiết.

@@ -16,8 +16,9 @@ Các yêu cầu này biến dashboard thành một phần của cơ chế human 
 \toprule
 Yêu cầu & Hiện thực hiện tại & Ràng buộc/việc cần làm \\ \midrule
 Khôi phục ngữ cảnh & Tự tải meeting mới nhất; cho phép nhập application meeting UUID hợp lệ & Chưa có danh sách/lọc meeting đầy đủ hay workspace selector \\
-Quan sát tổng quan & KPI positive/neutral/negative, coverage, polarity và model version & Không diễn giải KPI thành đánh giá con người \\
-Kiểm tra evidence & Hiển thị speaker, text, timestamp, quality status/reason, label và confidence & Chưa có lọc, phân trang hoặc export evidence \\
+Yêu cầu bot Jitsi & Form nhận URL Jitsi, tên bot, lựa chọn \texttt{vi}/\texttt{en}/\texttt{auto} và xác nhận consent trước khi gọi API & Form không cấp quyền vượt qua chính sách phòng họp; host vẫn quản lý phòng và participant \\
+Quan sát tổng quan & KPI positive, neutral, negative, coverage, polarity và model version & Không diễn giải KPI thành đánh giá con người \\
+Kiểm tra evidence & Hiển thị speaker, text, timestamp, quality status/reason, label và confidence; mặc định ẩn segment bị quality gate loại và có toggle để audit & Chưa có pagination, export evidence có phân quyền hoặc workspace policy \\
 Cập nhật gần thời gian thực & \texttt{EventSource} nhận SSE; debounce refresh 300 ms & SSE hiện dựa trên polling outbox ở backend, chưa có replay cursor/notification UI \\
 Phản hồi lỗi/trạng thái & Vùng \texttt{role=status} báo tải, meeting hiện hành và lỗi API & Chưa có error boundary, retry control hay offline state \\
 Accessibility & Form, button, heading và status dùng phần tử semantic cơ bản & Chưa có audit WCAG, label/legend đầy đủ cho timeline hoặc kiểm thử assistive technology \\
@@ -125,10 +126,12 @@ Hình~\ref{fig:frontend-architecture} mô tả luồng tích hợp. REST là đ�
 \section{Mô hình trạng thái và quá trình vận hành giao diện}
 Khi tải trang, frontend gọi \texttt{GET /v1/meetings?limit=1}. Nếu có meeting, ứng dụng kiểm tra UUID, lưu trạng thái cục bộ \texttt{meetingId}/\texttt{meeting}, rồi tải song song transcript, overview, speaker aggregates và timeline. Evidence được tải qua endpoint units sau khi các thành phần chính hoàn tất. Nếu người dùng nhập UUID, frontend chỉ gọi API khi chuỗi thỏa biểu thức UUID; điều này tránh request vô nghĩa đến backend do input lỗi.
 
-Sau khi chọn meeting, frontend tạo \texttt{EventSource} đến endpoint event của meeting. Hai event \texttt{transcript.segment.upserted} và \texttt{analysis.sentiment.updated} cùng gọi \texttt{scheduleRefresh}; timer debounce 300 ms gom các event liên tiếp trước khi reload dữ liệu. Người dùng có thể yêu cầu \texttt{POST /analysis?kind=final} bằng nút ``Chạy phân tích cuối''. Chuỗi trạng thái này được tóm tắt như sau:
+Sau khi chọn meeting, frontend tạo \texttt{EventSource} đến endpoint event của meeting. Event cập nhật transcript và event cập nhật sentiment cùng gọi \texttt{scheduleRefresh}; timer debounce 300 ms gom các event liên tiếp trước khi reload dữ liệu. Người dùng có thể yêu cầu \texttt{POST /analysis?kind=final} bằng nút ``Chạy phân tích cuối''. Chuỗi trạng thái này được tóm tắt như sau:
 \begin{center}
 \texttt{Chọn meeting $\rightarrow$ tải REST $\rightarrow$ render dashboard $\rightarrow$ kết nối SSE $\rightarrow$ event $\rightarrow$ refresh REST.}
 \end{center}
+
+Khi bắt đầu một cuộc họp mới, người dùng nhập URL Jitsi hợp lệ, tên bot và lựa chọn ngôn ngữ, rồi xác nhận rằng người tham gia đã được thông báo/đồng ý. Frontend gửi request tạo meeting tới backend và chuyển sang Application Meeting UUID mà backend trả về. Form chỉ yêu cầu Vexa gửi bot; nó không ghi secret vào browser, không mở media trực tiếp và không thay đổi quyền của phòng Jitsi. Điều này phân biệt thao tác tạo request khỏi bằng chứng rằng bot đã vào phòng hay transcript đã có segment cuối cùng.
 
 Thiết kế refresh lại từ REST có ưu điểm là mọi card, timeline và evidence cùng phản ánh state hiện hành trong PostgreSQL, kể cả khi event bị gom hoặc đến sát nhau. Đổi lại, nó tạo thêm request sau event và chưa tối ưu cho số lượng dashboard lớn. Nếu mở rộng, frontend cần hỗ trợ reconnection status, \texttt{Last-Event-ID}/replay policy, exponential backoff, hủy request cũ và chỉ refresh vùng dữ liệu bị ảnh hưởng sau khi đã đo tải thực tế.
 
@@ -139,7 +142,7 @@ Khu vực overview hiển thị sáu giá trị: tỷ lệ positive, neutral, ne
 Timeline dùng các button theo cửa sổ thời gian. Màu xanh/lục, đỏ và xám hiện chỉ mã hóa polarity aggregate để hỗ trợ quét nhanh, không phải màu trạng thái của một người. Khi chọn một điểm timeline, dashboard tải evidence hiện hành của meeting. Ở phiên bản tiếp theo cần liên kết điểm đã chọn với chính cửa sổ thời gian tương ứng, thêm legend/nhãn văn bản và không chỉ dựa vào màu; hiện click timeline đang tải toàn bộ evidence thay vì lọc theo window.
 
 \subsection{Evidence và trạng thái không chắc chắn}
-Evidence hiển thị speaker, label, confidence, text, thời điểm, quality status và quality reasons. Việc dùng \texttt{textContent} và DOM API để render transcript/evidence giúp tránh chèn text nguồn như HTML. Nội dung transcript vẫn là dữ liệu nhạy cảm; giao diện chỉ nên cung cấp cho người có quyền và không được đưa vào URL, analytics bên thứ ba hoặc log browser không cần thiết.
+Evidence hiển thị speaker, label, confidence, text, thời điểm, quality status và quality reasons. Mặc định, danh sách chỉ ưu tiên segment đủ điều kiện; toggle audit cho phép người vận hành xem cả segment bị lọc và lý do lọc mà không đưa chúng vào KPI/timeline. Việc dùng \texttt{textContent} và DOM API để render transcript/evidence giúp tránh chèn text nguồn như HTML. Nội dung transcript vẫn là dữ liệu nhạy cảm; giao diện chỉ nên cung cấp cho người có quyền và không được đưa vào URL, analytics bên thứ ba hoặc log browser không cần thiết.
 
 \textit{Unknown}, unit bị từ chối, coverage thấp và lỗi API là trạng thái hợp lệ của hệ thống. Giao diện hiện thể hiện một phần các trạng thái này qua text mô tả và \texttt{role=status}; khi vận hành thực tế cần bổ sung trạng thái loading/error riêng cho từng panel, retry có chủ đích, explanation ngắn cho coverage và cảnh báo về phạm vi diễn giải. Các cơ chế này quan trọng hơn việc che giấu dữ liệu thiếu bằng một chart ``đẹp''.
 

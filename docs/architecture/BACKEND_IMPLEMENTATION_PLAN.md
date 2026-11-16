@@ -1,5 +1,10 @@
 # Kế hoạch triển khai Backend Meeting Intelligence
 
+> **Kế hoạch lịch sử:** tài liệu này thiết kế đường Google Meet/extension trước
+> khi code dashboard chuyển sang Jitsi. Không dùng làm runbook hiện hành; xem
+> [JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md](JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md)
+> và [MEETING_INTELLIGENCE_ARCHITECTURE_AND_MODULES.md](MEETING_INTELLIGENCE_ARCHITECTURE_AND_MODULES.md).
+
 Tài liệu này là runbook triển khai code cho kiến trúc trong [BACKEND_DESIGN_REALTIME.md](BACKEND_DESIGN_REALTIME.md). Mỗi phase kết thúc bằng test và checkpoint. Không triển khai phase sau nếu checkpoint trước chưa đạt.
 
 ## 0. Quy ước và ranh giới

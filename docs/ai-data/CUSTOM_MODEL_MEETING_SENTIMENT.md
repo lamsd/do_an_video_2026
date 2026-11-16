@@ -52,7 +52,7 @@ Model chỉ nhận `analysis_unit` đã qua quality gate:
   "source_segment_ids": ["seg-1", "seg-2"],
   "speaker_key": "speaker-42",
   "source_revision": 17,
-  "preprocessing_version": "2026-09-v1"
+  "preprocessing_version": "2026-11-language-route-v1"
 }
 ```
 
@@ -94,10 +94,11 @@ source/model-data/approved/<dataset-version>/
   dataset-manifest.json
 ```
 
-Mỗi file có `text,label,meeting_id`. `label` chỉ là `negative`, `neutral` hoặc
-`positive`; `meeting_id` không được xuất hiện ở nhiều split. Dataset manifest phải
-ghi nguồn, license/consent, thời gian thu thập, số meeting/speaker/unit, hash, quy
-tắc redaction, label guideline, người annotator và lý do loại unit.
+Mỗi file có `text,label,meeting_id,language`. `language` chỉ nhận `vi`, `en` hoặc
+`mixed`; `label` chỉ là `negative`, `neutral` hoặc `positive`; `meeting_id` không
+được xuất hiện ở nhiều split. Dataset manifest phải ghi nguồn, license/consent,
+thời gian thu thập, số meeting/speaker/unit, hash, quy tắc redaction, label
+guideline, người annotator, chính sách language/code-switching và lý do loại unit.
 
 Quality gate đọc `dataset-manifest.json` trước EDA/train. Với profile
 `approved-meeting`, manifest phải có `dataset_kind` là
@@ -109,7 +110,8 @@ Quality gate đọc `dataset-manifest.json` trước EDA/train. Với profile
 ### Quy trình annotation
 
 1. Chốt guideline: polarity của **nội dung transcript**, phủ định, mỉa mai,
-   quotation, code-switching và insufficient context.
+   quotation, code-switching và insufficient context. Unit `mixed` phải được
+   đánh dấu rõ; không đưa vào model đơn ngữ chỉ vì có vài token tiếng Việt.
 2. Hai annotator gán nhãn độc lập ở cấp analysis unit.
 3. Adjudication cho bất đồng; báo cáo Cohen's kappa hoặc Krippendorff's alpha.
 4. Chia train/validation/test theo meeting trước tuning; khóa test set.
@@ -135,7 +137,7 @@ EDA aggregate của proxy và cách chạy lại nằm tại
 
 Notebook thực hiện các điểm bắt buộc sau:
 
-1. Kiểm tra manifest/hash, schema `text,label,meeting_id` và nhãn đúng ba lớp.
+1. Kiểm tra manifest/hash, schema `text,label,meeting_id,language` và nhãn đúng ba lớp.
 2. Dừng run nếu meeting hoặc exact text trùng giữa split.
 3. Word-segment tiếng Việt trước tokenizer PhoBERT, tokenize với `max_length=256`.
 4. Fine-tune với seed/version/hyperparameter được ghi lại.

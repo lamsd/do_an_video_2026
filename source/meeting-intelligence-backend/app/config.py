@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     analysis_consumer_group: str = "sentiment-workers"
     analysis_debounce_seconds: int = Field(default=20, ge=1, le=300)
     analysis_max_retries: int = Field(default=5, ge=0, le=20)
-    model_version: str = "baseline-rules-v1"
-    preprocessing_version: str = "2026-09-v1"
+    # This identifier is part of the persisted analysis-run contract.  Do not
+    # silently change it without a new, documented baseline.
+    model_version: str = "baseline-rules-v3"
+    preprocessing_version: str = "2026-11-stt-quality-gate-v2"
     sentiment_confidence_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
 
     @model_validator(mode="after")

@@ -1,16 +1,18 @@
 \chapter{Dữ Liệu và Pipeline Phân Tích}
 \label{chap:data}
 
-Chương này mô tả pipeline dữ liệu của MVP từ transcript nguồn đến dashboard. Mục tiêu của pipeline không chỉ là tạo nhãn sentiment, mà còn bảo toàn khả năng trả lời các câu hỏi: dữ liệu đến từ đâu, phiên bản nào đã được xử lý, vì sao một unit bị từ chối, mô hình nào tạo prediction và kết quả nào đang còn hiệu lực. Cách tổ chức này xem provenance là thuộc tính cần bảo toàn của dữ liệu, thay vì một thông tin bổ sung sau khi đã suy luận \cite{buneman2001}.
+Chương này mô tả pipeline dữ liệu hiện hành từ một phòng Jitsi Meet đến Dashboard. Mục tiêu không chỉ là tạo nhãn sentiment, mà còn bảo toàn khả năng trả lời các câu hỏi: dữ liệu đến từ đâu, phiên bản nào đã được xử lý, vì sao một unit bị loại, adapter nào tạo prediction và kết quả nào còn hiệu lực. Cách tổ chức này xem provenance là thuộc tính cần bảo toàn của dữ liệu thay vì thông tin bổ sung sau suy luận \cite{buneman2001}.
 
-\section{Nguồn dữ liệu, đơn vị xử lý và quản trị dữ liệu}
-\subsection{Nguồn dữ liệu trong MVP}
-Nguồn dữ liệu vận hành của MVP là transcript họp Google Meet do Vexa cung cấp, được tiếp nhận bằng webhook có xác minh chữ ký hoặc bằng cơ chế reconcile REST dự phòng. Transcript chỉ được dùng để kiểm chứng luồng tích hợp khi có consent phù hợp. Backend không coi Vexa là kho dữ liệu ứng dụng: sau khi nhận, dữ liệu được lưu trong PostgreSQL do ứng dụng sở hữu để có thể version, phân tích lại và áp dụng chính sách retention/delete độc lập.
+\section{Nguồn dữ liệu, đơn vị xử lý và ranh giới trách nhiệm}
+\subsection{Nguồn dữ liệu trong runtime}
+Runtime hiện hành nhận URL Jitsi Meet trên miền \url{https://meet.jit.si/}, theo sau là tên phòng. Jitsi là lớp hội nghị WebRTC: tài liệu kiến trúc của Jitsi mô tả Jitsi Videobridge là media router, Jicofo điều phối conference và Prosody phục vụ signalling \cite{jitsiArchitecture2026}. Ứng dụng không triển khai lại các thành phần đó. Khi host và người tham gia đã được thông báo/đồng ý, backend yêu cầu bot Vexa tham gia phòng; bot chuyển audio window đến dịch vụ STT local và Vexa cung cấp snapshot transcript cho backend. Vexa có API/luồng self-host riêng cho bot và transcript \cite{vexaQuickstart2026}; trong đề tài, Vexa không phải database phân tích của ứng dụng.
 
-Các dataset và notebook có sẵn trong thư mục dự án không được dùng làm ground truth cho chất lượng của ứng dụng, vì domain, nhãn và đơn vị văn bản của chúng có thể khác transcript họp. Role-play hoặc transcript tổng hợp chỉ phù hợp với smoke test; chúng không thay thế dữ liệu đánh giá có gán nhãn. Nếu xây dựng custom model trong tương lai, dataset cần có license, mục đích sử dụng, cách thu thập, thành phần dữ liệu và giới hạn được ghi nhận theo tinh thần datasheets for datasets \cite{gebru2021}.
+Backend sao chép transcript vào PostgreSQL do ứng dụng sở hữu để version, phân tích lại và áp dụng retention/delete độc lập. REST reconcile là đường đồng bộ bắt buộc; signed webhook là tối ưu notification khi một endpoint HTTPS phù hợp đã được cấu hình. Cách tách này tránh giả định rằng một event của provider luôn đến đủ, đúng thứ tự hoặc không trùng.
+
+Các dataset và notebook trong repository không được dùng làm ground truth cho chất lượng ứng dụng, vì domain, nhãn và đơn vị văn bản có thể khác transcript họp. Role-play hoặc transcript tổng hợp chỉ phù hợp với smoke test. Nếu xây dựng custom model, dataset phải ghi nhận license, mục đích, cách thu thập, thành phần và giới hạn theo tinh thần datasheets for datasets \cite{gebru2021}.
 
 \subsection{Khái niệm và hợp đồng dữ liệu}
-Pipeline dùng các khái niệm ở Bảng~\ref{tab:data-contract} để tách dữ liệu gốc khỏi dữ liệu suy luận và dữ liệu trình bày. Hợp đồng thống nhất này cũng là điểm nối cho platform adapter: Google Meet đã được kiểm chứng; Teams, Zoom và Jitsi Meet chỉ có thể tham gia pipeline sau khi adapter của từng nền tảng chuẩn hóa được các trường tương đương và được kiểm thử riêng.
+Pipeline dùng các khái niệm ở Bảng~\ref{tab:data-contract} để tách dữ liệu gốc, dữ liệu đủ điều kiện suy luận và dữ liệu trình bày. Hợp đồng thống nhất này là điểm nối của platform adapter: Jitsi là adapter runtime hiện hành; Google Meet, Teams và Zoom chỉ là hướng mở rộng sau khi có contract nguồn, consent và kiểm thử riêng.
 
 \begin{table}[H]
 \centering
@@ -19,93 +21,86 @@ Pipeline dùng các khái niệm ở Bảng~\ref{tab:data-contract} để tách 
 \begin{tabularx}{\linewidth}{p{0.22\linewidth}X}
 \toprule
 Khái niệm & Định nghĩa trong hệ thống \\ \midrule
-Raw segment & Segment transcript từ nguồn, gồm định danh nguồn, speaker, text, timestamp, ngôn ngữ và trạng thái. Dữ liệu gốc được giữ trong PostgreSQL. \\
-Final segment & Segment có \texttt{is\_final=true} và không bị \texttt{retracted}; chỉ loại này được xét để tạo analysis unit. \\
-Revision & Số phiên bản tăng khi text, speaker hoặc thời gian của segment thay đổi. Meeting có \texttt{transcript\_revision} để gắn toàn bộ analysis run với ảnh chụp nguồn. \\
-Analysis unit & Một đến ba final segment liền kề cùng speaker, giới hạn trong cửa sổ 45 giây; là đơn vị đầu vào cho classifier. \\
-Prediction & Label, confidence, phân bố lớp (nếu adapter cung cấp), polarity, thời gian inference và \texttt{model\_version}. \\
+Raw segment & Segment transcript từ nguồn gồm định danh nguồn, speaker, text, timestamp, ngôn ngữ và trạng thái. Dữ liệu gốc được giữ để audit, không bị ``làm đẹp''. \\
+Quality decision & Kết quả accepted/rejected cùng \texttt{quality\_reasons}; quyết định này tách khỏi raw text để nhìn thấy vì sao một đoạn không đi vào model. \\
+Revision & Số phiên bản tăng khi text, speaker hoặc thời gian segment thay đổi. Meeting có \texttt{transcript\_revision} để gắn analysis run với ảnh chụp nguồn. \\
+Analysis unit & Một đến ba final segment liền kề cùng speaker/ngôn ngữ, tối đa 45 giây; là đơn vị đầu vào của classifier. \\
+Prediction & Label, confidence, phân bố lớp (nếu adapter cung cấp), polarity, inference time, model version và lý do abstain. \\
 Evidence & Liên kết từ aggregate/prediction đến unit, segment ID, revision, text chuẩn hóa, timestamp, preprocessing version và model version. \\
-Coverage & Tỷ lệ unit có prediction khác \textit{unknown}; được hiển thị cùng kết quả tổng hợp. \\
+Coverage & Tỷ lệ unit có prediction khác \textit{unknown}; không được ngầm diễn giải \textit{unknown} là neutral. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \section{Sơ đồ pipeline và quá trình vận hành}
-Hình~\ref{fig:data-pipeline} biểu diễn luồng dữ liệu đã hiện thực. Mũi tên liền là đường xử lý của MVP Google Meet--Vexa; khung nét đứt biểu thị lớp adapter mở rộng và không phải tính năng đã kiểm chứng. PostgreSQL giữ bản ghi bền vững và outbox; Valkey Stream chỉ vận chuyển job cho worker. Dashboard nhận event qua SSE từ backend và đọc dữ liệu phân tích qua API, không gọi Vexa trực tiếp.
+Hình~\ref{fig:data-pipeline} biểu diễn đường dữ liệu hiện hành. PostgreSQL giữ bản ghi bền vững và outbox; Valkey Stream chỉ vận chuyển \texttt{run\_id}. Dashboard nhận tín hiệu SSE từ backend, sau đó đọc state có thẩm quyền qua REST thay vì gọi Vexa trực tiếp.
 
 \begin{figure}[H]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  node distance=9mm and 12mm,
-  source/.style={draw=primaryblue, rounded corners=2pt, fill=lightblue, align=center, minimum width=28mm, minimum height=11mm},
-  process/.style={draw=accentblue, rounded corners=2pt, fill=accentblue!12, align=center, minimum width=31mm, minimum height=11mm},
-  store/.style={draw=primaryblue, cylinder, shape border rotate=90, aspect=0.28, fill=primaryblue!12, align=center, minimum width=24mm, minimum height=14mm},
-  future/.style={draw=gray, dashed, rounded corners=2pt, fill=gray!10, align=center, minimum width=30mm, minimum height=11mm},
+  node distance=9mm and 11mm,
+  source/.style={draw=primaryblue, rounded corners=2pt, fill=lightblue, align=center, minimum width=26mm, minimum height=11mm},
+  process/.style={draw=accentblue, rounded corners=2pt, fill=accentblue!12, align=center, minimum width=30mm, minimum height=11mm},
+  store/.style={draw=primaryblue, cylinder, shape border rotate=90, aspect=0.28, fill=primaryblue!12, align=center, minimum width=25mm, minimum height=14mm},
+  future/.style={draw=gray, dashed, rounded corners=2pt, fill=gray!10, align=center, minimum width=29mm, minimum height=11mm},
   flow/.style={-{Stealth[length=2.2mm]}, thick, draw=primaryblue},
   auxiliary/.style={-{Stealth[length=2.2mm]}, thick, draw=gray, dashed}
 ]
-  \node[source] (meet) {Google Meet\\(đã kiểm chứng)};
-  \node[source, right=of meet] (vexa) {Vexa bot\\và transcript};
-  \node[process, right=of vexa] (api) {FastAPI\\webhook / reconcile};
-  \node[store, right=of api] (db) {PostgreSQL\\segment, revision,\\run, outbox};
-  \node[process, right=of db] (queue) {Valkey Stream\\analysis job};
-  \node[process, below=of queue] (worker) {Sentiment worker\\quality gate + adapter};
-  \node[process, left=of worker] (aggregate) {Unit, prediction,\\aggregate window};
-  \node[process, left=of aggregate] (sse) {FastAPI SSE/API\\event + evidence};
-  \node[source, left=of sse] (dash) {Dashboard\\KPI, timeline, evidence};
-  \node[future, above=of vexa] (platforms) {Teams / Zoom / Jitsi Meet\\platform adapter (đề xuất)};
+  \node[source] (meet) {Jitsi Meet\\host + participants};
+  \node[source, right=of meet] (bot) {Vexa bot\\Jitsi adapter};
+  \node[process, right=of bot] (stt) {STT local\\VAD + quality source gate};
+  \node[process, right=of stt] (vexa) {Vexa transcript\\API};
+  \node[process, right=of vexa] (api) {FastAPI\\sync / webhook};
+  \node[source, above=of api] (dash) {Dashboard\\transcript, KPI, evidence};
+  \node[store, below=of api] (db) {PostgreSQL\\segment, revision,\\run, outbox};
+  \node[process, left=of db] (queue) {Valkey Stream\\analysis job};
+  \node[process, left=of queue] (worker) {Sentiment worker\\quality + adapter};
+  \node[future, above=of vexa] (future) {Google Meet / Teams / Zoom\\adapter (đề xuất)};
 
-  \draw[flow] (meet) -- (vexa);
+  \draw[flow] (meet) -- node[above, font=\scriptsize]{consent, audio} (bot);
+  \draw[flow] (bot) -- (stt);
+  \draw[flow] (stt) -- node[above, font=\scriptsize]{final segment} (vexa);
   \draw[flow] (vexa) -- (api);
   \draw[flow] (api) -- (db);
   \draw[flow] (db) -- (queue);
   \draw[flow] (queue) -- (worker);
-  \draw[flow] (worker) -- (aggregate);
-  \draw[flow] (aggregate) -- (sse);
-  \draw[flow] (sse) -- (dash);
-  \draw[flow] (aggregate.north) |- (db.south);
-  \draw[auxiliary] (platforms) -- (vexa);
+  \draw[flow] (worker.south) -- ++(0,-6mm) -| node[pos=0.58, below, font=\scriptsize]{prediction, aggregate, outbox} (db.south);
+  \draw[flow] (api) -- node[right, font=\scriptsize]{REST/SSE state} (dash);
+  \draw[auxiliary] (future) -- (vexa);
 \end{tikzpicture}%
 }
-\caption{Pipeline dữ liệu và vận hành của MVP. Nét đứt: hướng mở rộng chưa được kiểm chứng.}
+\caption{Pipeline Jitsi--Vexa--STT--Meeting Intelligence. Nét đứt là adapter chưa được nghiệm thu trong runtime hiện hành.}
 \label{fig:data-pipeline}
 \end{figure}
 
-Quy trình vận hành bắt đầu khi người dùng yêu cầu tạo bot cho Google Meet. Vexa thu transcript; backend nhận webhook khi nguồn phát sự kiện hoặc reconcile lại transcript qua REST khi cần. Segment được upsert theo khóa \texttt{(meeting\_id, vexa\_segment\_id)}. Nếu nội dung, speaker hoặc thời gian thay đổi, revision của segment và \texttt{transcript\_revision} của meeting được tăng, đồng thời tạo outbox event có dedupe key. Khi meeting hoàn tất hoặc người dùng yêu cầu phân tích, backend tạo một \texttt{analysis\_run} gắn với source revision, model version và preprocessing version rồi đưa job vào Valkey Stream.
+Quy trình bắt đầu khi người dùng nhập URL Jitsi, chọn ngôn ngữ nói \texttt{vi}, \texttt{en} hoặc \texttt{auto}, và xác nhận consent. Backend kiểm URL, kiểm meeting active trùng phòng để tránh spawn lặp, sau đó gọi Vexa server-to-server. Khi transcript xuất hiện, segment được upsert theo khóa \texttt{(meeting\_id, vexa\_segment\_id)}. Thay đổi text, speaker hoặc timestamp tăng revision segment và \texttt{transcript\_revision} của meeting, đồng thời tạo outbox event có dedupe key.
 
-Worker đọc job theo consumer group, tạo analysis unit, gọi classifier adapter, lưu prediction và aggregate theo cửa sổ một phút. Khi run thành công, worker tạo \texttt{analysis.sentiment.updated} trong outbox. Endpoint SSE đọc outbox theo meeting, phát event cùng keepalive cho dashboard; dashboard sau đó làm mới overview, timeline và evidence qua API. Nếu Valkey không sẵn sàng khi enqueue, analysis run vẫn được lưu ở trạng thái \texttt{queued}; worker có cơ chế quét các run đang chờ để phục hồi xử lý. Đây là lý do PostgreSQL, thay vì queue, được chọn làm nguồn dữ liệu chuẩn.
+Sau khi có segment final đạt điều kiện, backend tạo analysis run gắn với source revision, model version và preprocessing version, sau đó đưa \texttt{run\_id} vào Valkey Stream. Worker tạo analysis unit, gọi classifier adapter, lưu prediction và aggregate theo cửa sổ phút. Khi run thành công, worker phát event \texttt{analysis.sentiment.\allowbreak updated}; Dashboard nhận SSE như tín hiệu refresh và đọc lại overview, timeline và evidence qua API.
 
-\section{Các giai đoạn xử lý dữ liệu}
-\subsection{Ingest, chuẩn hóa và versioning}
-Tại ingest, pipeline giữ text gốc từ provider cùng metadata nguồn, không chỉnh sửa nội dung để ``làm đẹp'' transcript. Bản text chuẩn hóa chỉ dùng trong bước phân tích: Unicode NFC được chuẩn hóa và whitespace được rút gọn, trong khi dấu tiếng Việt được giữ lại. Việc tách raw data và normalized text giúp hệ thống vừa tái lập được xử lý vừa cho phép kiểm tra lại dữ liệu nguồn.
+\section{STT local, quality gate và language routing}
+\subsection{STT local và trade-off CPU}
+Whisper cho thấy cách huấn luyện weak supervision quy mô lớn có thể hỗ trợ nhận dạng tiếng nói đa ngôn ngữ \cite{whisper2022}. Runtime này dùng \texttt{faster-whisper}, một triển khai Whisper trên CTranslate2. Tài liệu của dự án mô tả các tuỳ chọn CPU \texttt{int8}, language probability và VAD được dùng trong runtime \cite{fasterwhisper2026}.
 
-Versioning xử lý hai dạng thay đổi: thay đổi transcript của provider và thay đổi cách phân tích. Thay đổi thứ nhất tạo segment/meeting revision; thay đổi thứ hai được biểu diễn bởi \texttt{model\_version} và \texttt{preprocessing\_version}. Kết quả cũ được đánh dấu không còn hiện hành (\texttt{is\_current=false}) thay vì bị ghi đè. Nhờ đó, cùng một cuộc họp có thể được phân tích lại mà không mất liên kết tới phiên bản dữ liệu và mô hình đã tạo ra mỗi prediction.
+Worker hiện dùng model \texttt{small}, CPU \texttt{int8}, một request active và VAD bảo thủ. Đây là lựa chọn vận hành để hạn chế queue backlog/503 trên máy CPU, không phải tuyên bố model này đạt chất lượng tương đương một dịch vụ transcription hoặc translation thương mại. Medium/large có thể cải thiện nhận dạng trong một số bối cảnh nhưng phải được benchmark trên phần cứng và workload thật trước khi thay runtime.
 
-\subsection{Quality gate, language routing và xây analysis unit}
-Quality gate từ chối segment rỗng, dưới ba token, có duration âm, chưa final, bị retracted hoặc khớp mẫu hallucination đã biết. Lý do từ chối được lưu trong \texttt{quality\_reasons}. Với segment hợp lệ, language router ưu tiên dấu hiệu tiếng Việt trong text, sau đó mới tham chiếu ngôn ngữ do nguồn cung cấp. Runtime hiện tại chỉ xử lý \texttt{vi}; ngôn ngữ khác trả \textit{unknown} thay vì bị ép vào một lớp sentiment.
+\subsection{Ba lớp lọc và bảo toàn audit}
+Lớp STT bỏ audio ngắn, candidate có tín hiệu confidence xấu, decoded result quá ngắn và các mẫu media-outro đã biết như ``subscribe/đăng ký kênh''. Prompt của window trước bị tắt mặc định để một câu sai không quay lại làm context cho window sau. Mục tiêu là giảm khả năng một lỗi lặp biến thành transcript mới; đây không phải cơ chế chứng minh semantic correctness.
 
-Các segment accepted được ghép theo cùng speaker, tối đa ba segment và không vượt quá 45 giây tính từ segment đầu. Nếu speaker thay đổi, thời gian vượt ngưỡng hoặc gặp segment bị từ chối, unit đang mở được flush. Pipeline cũng loại duplicate gần nhau của cùng speaker để một câu bị nguồn phát lặp không làm méo aggregate. Các quy tắc này là quyết định tiền xử lý của hệ thống; chúng phải được ghi version và đánh giá lại nếu thay classifier hoặc thay nguồn transcript.
+Backend vẫn giữ raw segment nhưng đặt cờ \texttt{analysis\_eligible} thành \texttt{false} nếu text rỗng, dưới ba token, chưa final, retracted, có duration không hợp lệ, chứa script không phù hợp, hoặc khớp mẫu hallucination. Dashboard ẩn các segment này mặc định nhưng cho phép người vận hành bật chúng để đối chiếu. Vì vậy, bộ lọc không âm thầm xóa bằng chứng nguồn và segment bị lọc không làm méo KPI/model.
 
-\subsection{Suy luận, persistence và tổng hợp}
-Chỉ analysis unit được chấp nhận mới đi vào \texttt{SentimentClassifier}. Adapter hiện hành là \texttt{baseline-rules-v2}; mục đích là kiểm chứng data contract và vòng đời xử lý, không phải đo chất lượng sentiment. Với custom model sau này, adapter phải trả về đúng hợp đồng prediction, đồng thời model artifact, preprocessing, tập đánh giá và giới hạn sử dụng cần được version hóa và ghi nhận \cite{mitchell2019}.
+Language router chuẩn hóa Unicode NFC/whitespace, xét dấu hiệu nội dung rồi đối chiếu metadata nguồn. Router tạo các route \texttt{vi}, \texttt{en}, \texttt{mixed} hoặc \texttt{unknown}. Baseline \texttt{baseline-rules-v3} nhận \texttt{vi}/\texttt{en}; route \texttt{mixed} và ngôn ngữ không hỗ trợ trả \textit{unknown} thay vì bị ép vào một nhãn polarity. Điều này phân biệt routing với dịch máy: Dashboard hiển thị transcript gốc, không tuyên bố có bộ dịch.
 
-Sau inference, pipeline lưu prediction theo cặp duy nhất \texttt{(analysis\_run\_id, analysis\_unit\_id)}. Aggregate được tạo ở hai scope: toàn meeting và theo speaker; mỗi scope được bucket theo phút. Với unit $i$, polarity của adapter được xác định:
+\subsection{Xây analysis unit, suy luận và tổng hợp}
+Các segment accepted được ghép theo cùng speaker và language, tối đa ba segment, không vượt 45 giây. Khi speaker/language đổi, time window vượt ngưỡng hoặc gặp segment bị loại, unit đang mở được flush. Pipeline cũng khử duplicate gần nhau cùng speaker để nguồn phát lặp không làm méo aggregate. Những quy tắc này thuộc preprocessing version \texttt{2026-11-stt-quality-gate-v2}; thay đổi quy tắc phải tạo run mới thay vì ghi đè kết quả cũ.
+
+Adapter hiện hành là \texttt{baseline-rules-v3}, một baseline theo luật Việt--Anh để kiểm chứng data contract, không phải mô hình đã huấn luyện. Custom model phải trả đúng hợp đồng prediction, có artifact hash, model/preprocessing version, tập đánh giá và giới hạn sử dụng được ghi nhận \cite{mitchell2019}. Prediction lưu theo cặp duy nhất \texttt{(analysis\_run\_id, analysis\_unit\_id)}; aggregate chỉ dùng nhãn \textit{positive}, \textit{neutral}, \textit{negative}. Nếu không có prediction đủ điều kiện, score là \texttt{null}, không phải neutral.
+
+\section{Tính đúng đắn vận hành và giới hạn đo lường}
+Pipeline hướng tới xử lý ít nhất một lần ở lớp queue. \texttt{analysis\_runs} có ràng buộc duy nhất trên bốn trường: định danh meeting, loại run, revision nguồn và version model; outbox có dedupe key. Worker chỉ acknowledge message sau khi transaction thành công. Nếu Valkey tạm không sẵn sàng khi enqueue, run vẫn được lưu queued để worker có thể khôi phục; điều này giải thích vì sao PostgreSQL, không phải queue, là nguồn dữ liệu chuẩn.
+
+Độ trễ có thể phân rã thành:
 \begin{equation}
-  p_i=P_i(positive)-P_i(negative),\qquad score_{window}=\frac{1}{N}\sum_{i=1}^{N}p_i.
+  T_{e2e}=T_{capture}+T_{stt}+T_{ingest}+T_{queue}+T_{analysis}+T_{delivery}.
 \end{equation}
-Chỉ prediction có nhãn \textit{positive}, \textit{neutral} hoặc \textit{negative} tham gia aggregate. Nếu $N=0$, score được lưu là \texttt{null}; dashboard không nên diễn giải trường hợp này là trạng thái trung tính. Trong runtime \texttt{baseline-rules-v2}, confidence là điểm theo luật chưa calibration; vì vậy aggregate hiện dùng đếm nhãn/mean không trọng số, không nhân theo confidence hoặc token count. Polarity chỉ là heuristic trực quan của adapter, không phải metric nghiên cứu hay xác suất về người nói. Chỉ sau khi model có calibration evaluation độc lập mới xem xét weighting có biện minh \cite{guo2017}.
-
-\section{Tính đúng đắn vận hành và khả năng phục hồi}
-Pipeline hướng tới xử lý ít nhất một lần ở lớp queue; vì vậy idempotency và persistence là điều kiện cần để retry không nhân bản kết quả. \texttt{analysis\_runs} có ràng buộc duy nhất trên \texttt{(meeting\_id, kind, source\_revision, model\_version)}; outbox cũng có dedupe key. Worker chỉ acknowledge message Valkey sau khi xử lý và commit thành công. Nếu xử lý lỗi, transaction được rollback, run được ghi lỗi và message chưa được acknowledge để có thể quan sát/khôi phục theo cơ chế vận hành.
-
-Webhook được xác minh HMAC kèm timestamp để giảm nguy cơ giả mạo và replay; event ID được lưu trong \texttt{incoming\_webhooks} để loại event trùng. REST reconcile vẫn cần thiết vì webhook có thể đến muộn hoặc thất bại. Các cơ chế này tăng khả năng phục hồi của pipeline, nhưng không thay thế yêu cầu giám sát queue lag, lỗi API, retry và backup/restore PostgreSQL trong môi trường production.
-
-\section{Độ trễ, chỉ số và giới hạn đo lường}
-Độ trễ end-to-end được tách thành:
-\begin{equation}
-T_{e2e}=T_{capture}+T_{ingest}+T_{queue}+T_{analysis}+T_{delivery},
-\end{equation}
-trong đó $T_{capture}$ là thời gian từ audio đến final segment; các thành phần sau lần lượt là ingest, chờ queue, xử lý và phát lên dashboard. Cách phân rã này giúp xác định nút thắt thay vì chỉ báo cáo một số latency tổng. Trong MVP, chưa có log đo đầy đủ từng thành phần và chưa có benchmark tải; do đó tuyên bố phù hợp là \emph{near-real-time}, không phải một SLA định lượng.
-
-Các chỉ số cần đo khi mở rộng gồm: số segment/unit, tỷ lệ bị từ chối theo lý do, coverage, phân bố lớp, tỷ lệ retry/failure, queue lag, P50/P95 của $T_{analysis}$ và $T_{e2e}$, cùng mức sử dụng tài nguyên. WER/CER chỉ báo cáo khi có audio và ground truth phù hợp; macro-F1, calibration và metric theo lớp chỉ báo cáo khi có dataset sentiment đúng task, chia tập theo meeting và test set độc lập. Không có số liệu nào trong nhóm này được suy ra từ smoke test hoặc rule baseline.
+Trong MVP chưa có benchmark tải hay log đầy đủ từng thành phần, nên chỉ có thể gọi hệ thống là \emph{near-real-time}. WER/CER chỉ được báo cáo khi có audio, transcript chuẩn và tokenization đã chốt; macro-F1/calibration chỉ được báo cáo với corpus sentiment đúng task và test set độc lập theo meeting. Không chỉ số nào trong các nhóm này được suy ra từ smoke test hoặc rule baseline.

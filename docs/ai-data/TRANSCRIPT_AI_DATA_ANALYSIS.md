@@ -1,5 +1,12 @@
 # Báo cáo Phân tích Kỹ thuật & Xử lý AI trên Dữ liệu Transcript
 
+> **Mẫu chẩn đoán lịch sử:** các số liệu, URL Google Meet và transcript trong tài
+> liệu này mô tả một snapshot cũ `transcript.json`, không phải benchmark hoặc trạng
+> thái runtime hiện hành. Không so sánh trực tiếp các số liệu này với Jitsi + Vexa +
+> STT local. Xem [kiến trúc runtime hiện hành](../architecture/JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md)
+> và [hợp đồng dữ liệu Việt--Anh](BILINGUAL_TRANSCRIPT_DATA_CONTRACT.md) trước khi
+> lập báo cáo mới.
+
 > **Tài liệu tham chiếu:** `transcript.json`  
 > **Hệ thống liên quan:** Vexa STT Bot, Google Meet, `meeting-intelligence-backend`, Mô hình PhoBERT Sentiment & LLM Summarizer.  
 > **Mục tiêu:** Phân tích toàn diện mạch kỹ thuật từ tầng thu nhận âm thanh (ASR/Diarization) đến tầng dữ liệu xử lý bằng AI (Quality Gate, Analysis Units, Sentiment Polarity, Emotion Intent và Meeting Intelligence).
@@ -472,7 +479,7 @@ MODEL_DEVICE=cpu
 INFERENCE_MAX_BATCH_UNITS=16
 INFERENCE_MAX_BATCH_TOKENS=2048
 SENTIMENT_CONFIDENCE_THRESHOLD=0.60
-PREPROCESSING_VERSION=2026-09-v1
+PREPROCESSING_VERSION=2026-11-language-route-v1
 ```
 
 Tên biến là contract đề xuất; validation phải fail-fast cho URL/giới hạn batch/threshold sai, nhưng không bắt worker production khởi động nếu model manifest/checksum không hợp lệ.

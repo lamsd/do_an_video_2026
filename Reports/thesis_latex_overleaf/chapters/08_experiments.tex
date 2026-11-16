@@ -1,9 +1,11 @@
 \chapter{Kiểm Chứng Ứng Dụng và Triển Khai Hệ Thống}
 \label{chap:experiments}
 
-Chương này kiểm chứng artefact phần mềm thay vì xây dựng hay đánh giá mô hình học máy. Mục tiêu là xác nhận người dùng có thể đi từ một cuộc họp được phép xử lý đến dashboard có thể truy vết: hệ thống nhận transcript, tạo analysis run, lưu evidence, hiển thị đúng phiên bản xử lý và bàn giao trạng thái vận hành mà không lộ nội dung họp. Phạm vi gồm Google Meet qua Vexa, FastAPI, PostgreSQL, Valkey, worker, Dashboard và Docker Compose. ESP32, firmware, suy luận audio edge, huấn luyện/fine-tuning, gán nhãn corpus, benchmark model, WER/CER và kết luận sức khỏe tâm thần nằm ngoài chương này.
+Chương này kiểm chứng artefact phần mềm thay vì xây dựng hay đánh giá mô hình học máy. Mục tiêu là xác nhận người dùng có thể đi từ một cuộc họp được phép xử lý đến dashboard có thể truy vết: hệ thống nhận transcript, tạo analysis run, lưu evidence, hiển thị đúng phiên bản xử lý và bàn giao trạng thái vận hành mà không lộ nội dung họp. Phạm vi gồm Jitsi Meet qua Vexa, STT local, FastAPI, PostgreSQL, Valkey, worker, Dashboard và Docker Compose. ESP32, firmware, suy luận audio edge, huấn luyện/fine-tuning, gán nhãn corpus, benchmark model, WER/CER và kết luận sức khỏe tâm thần nằm ngoài chương này.
 
 Vì vậy, thực nghiệm trong chương có nghĩa là kiểm chứng triển khai với fixture tổng hợp và UAT có hướng dẫn. Nó không tạo F1, accuracy, AUC, P95, SLA hay xếp hạng model. Adapter sentiment đang cấu hình chỉ là thành phần tạo output cho pipeline. Coverage, revision, trạng thái run và batch inference duration là trạng thái vận hành của một lần chạy, không là chất lượng dự đoán.
+
+\paragraph{Quy ước mức bằng chứng.} Để không đánh đồng năng lực có trong mã nguồn với một lần chạy đã được xác minh, chương này dùng ba mức: \textbf{E0} là thiết kế hoặc mã nguồn có thể kiểm tra nhưng chưa chứng minh đã chạy; \textbf{E1} là quan sát từ snapshot giao diện hoặc checklist, chỉ được mô tả là \emph{quan sát được}; và \textbf{E2} là evidence bundle tái lập được, có lệnh, exit code, thời điểm, phiên bản và log đã redaction. Chỉ E2 mới được ghi \emph{PASS} trong phạm vi tiêu chí tương ứng. Một snapshot có trạng thái \texttt{succeeded} vẫn chỉ là E1 nếu không đi kèm bundle E2.
 
 \section{Mục tiêu kiểm chứng và yêu cầu chấp nhận}
 
@@ -30,19 +32,21 @@ OR-03 & Chưa public khi thiếu kiểm soát production & Loopback, TLS, authen
 
 Một lần pass chỉ được ghi nhận khi có artifact tương ứng. Evidence bundle tối thiểu có commit hoặc image digest, thời điểm chạy, phiên bản container, command/script, exit code, log đã redaction, Application Meeting UUID nếu được phép lưu cục bộ, và response analytics không chứa transcript. Một script tồn tại trong repository không phải bằng chứng script đã chạy.
 
+Kho evidence hiện có giữ bundle integration synthetic \texttt{EVID-20261018-INT02} với kết quả \texttt{PASS}; manifest của chính bundle này ghi \texttt{baseline-rules-v2} và preprocessing \texttt{2026-09-v1}. Bundle đó là E2 cho một pipeline synthetic lịch sử, không xác minh runtime \texttt{baseline-rules-v3}, cấu hình preprocessing hiện tại hoặc một phiên Jitsi thật. Các snapshot ngày 15/11/2026 được báo cáo bên dưới vì chúng là artefact quan sát có ích, nhưng vẫn thuộc E1 do không có Evidence ID, command, exit code và log/API export đã redaction đi kèm.
+
 \section{Thiết kế kiểm chứng theo tầng}
 
 \subsection{Kiểm thử hợp đồng và pipeline tổng hợp}
 
-Các test đơn vị bao phủ quality gate, unit builder, service/Vexa parser và metric của analysis run. Chúng kiểm tra invariant như chuẩn hóa tiếng Việt, loại hallucinatory text, ghép unit, khử duplicate gần nhau, fallback speaker có kiểm soát, URL Google Meet không hợp lệ và phép tính coverage không chia cho không. Lệnh \texttt{uv run pytest -q} chỉ kết luận invariant mã nguồn pass sau khi output thực tế được capture vào evidence bundle; nó không đo cảm xúc của con người.
+Mã test đơn vị hiện có bao phủ quality gate, unit builder, service/Vexa parser và metric của analysis run. Các test kiểm tra invariant như chuẩn hóa tiếng Việt, loại hallucinatory text, ghép unit, khử duplicate gần nhau, fallback speaker có kiểm soát, URL Jitsi không hợp lệ, routing ngôn ngữ và phép tính coverage không chia cho không. Lệnh \texttt{uv run pytest -q} chỉ kết luận invariant mã nguồn pass sau khi output thực tế được capture vào evidence bundle; nó không đo cảm xúc của con người.
 
-Script \texttt{smoke-analysis-pipeline.sh} tạo meeting fixture tổng hợp, gửi final analysis qua API, chờ worker, kiểm tra analytics API rồi xóa toàn bộ row phụ thuộc theo UUID fixture. Đường đi được kiểm chứng là API $\rightarrow$ PostgreSQL $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ persistence/aggregate $\rightarrow$ analytics API. Fixture có output xác định, nên không được dùng làm accuracy hay so sánh adapter.
+Script \texttt{smoke-analysis-pipeline.sh} tạo meeting fixture tổng hợp, gửi final analysis qua API, chờ worker, kiểm tra analytics API rồi xóa toàn bộ row phụ thuộc theo UUID fixture. Đường đi mà script kiểm tra là API $\rightarrow$ PostgreSQL $\rightarrow$ Valkey Stream $\rightarrow$ worker $\rightarrow$ persistence/aggregate $\rightarrow$ analytics API. Fixture có output xác định, nên không được dùng làm accuracy hay so sánh adapter.
 
 \subsection{Readiness và triển khai container}
 
-\texttt{verify.sh} kiểm trạng thái Compose, \texttt{/ready} của backend và HTML dashboard. \texttt{runtime-status.sh} tạo audit read-only về service, port và readiness nhưng không in \texttt{settings.env}, transcript hay biến môi trường container. Hai script chứng minh service reachable tại một thời điểm; chúng không phải load test hoặc SLA.
+\texttt{verify.sh} kiểm trạng thái Compose, \texttt{/ready} của backend và HTML dashboard. \texttt{runtime-status.sh} tạo audit read-only về service, port và readiness nhưng không in \texttt{settings.env}, transcript hay biến môi trường container. Khi được chạy và lưu log, hai script chỉ xác nhận service reachable tại một thời điểm; chúng không phải load test hoặc SLA.
 
-Deployment chỉ dùng một entry point là \texttt{source/compose.yaml}. Backend và worker dùng PostgreSQL/Valkey application-owned; dashboard static đi qua Nginx reverse proxy cùng origin \texttt{/api/}. Một container có trạng thái \emph{running} chưa đủ để kết luận thành công: readiness và pipeline synthetic phải cùng pass. Cổng dashboard/backend bind loopback cho demo nội bộ; không public PostgreSQL, Valkey, Vexa admin API hoặc Docker socket.
+Deployment chỉ dùng một entry point: file \texttt{compose.yaml} trong thư mục \texttt{source/}. Backend và worker dùng PostgreSQL/Valkey application-owned; dashboard static đi qua Nginx reverse proxy cùng origin \texttt{/api/}. Một container có trạng thái \emph{running} chưa đủ để kết luận thành công: readiness và pipeline synthetic phải cùng pass. Cổng dashboard/backend bind loopback cho demo nội bộ; không public PostgreSQL, Valkey, Vexa admin API hoặc Docker socket.
 
 \subsection{UAT dashboard và tiện ích bàn giao}
 
@@ -54,16 +58,18 @@ Script \texttt{dashboard-acceptance.sh} bổ sung kiểm tra read-only. Không c
 
 \begin{table}[H]
 \centering
+\small
+\renewcommand{\arraystretch}{1.16}
 \caption{Ma trận kiểm chứng ứng dụng của MVP}
 \label{tab:application-verification-matrix}
-\begin{tabularx}{\linewidth}{p{0.18\linewidth}p{0.28\linewidth}XX}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.43\linewidth}>{\raggedright\arraybackslash}X}
 \toprule
-Nhóm & Artefact & Tiêu chí pass & Phạm vi tuyên bố \\ \midrule
-Hợp đồng mã nguồn & Các test quality, units, service và Vexa & Invariant input, quality, parser và metric đúng & Không đo chất lượng sentiment/ASR \\
-Pipeline nội bộ & \texttt{smoke-analysis-pipeline.sh} & Fixture đi qua API, queue, worker và analytics; cleanup & Luồng application-owned với dữ liệu tổng hợp \\
-Runtime & \texttt{verify.sh}, \texttt{runtime-status.sh} & Compose, \texttt{/ready} và dashboard reachable & Reachability tại thời điểm kiểm tra \\
-Dashboard UAT & Checklist UI; \texttt{dashboard-acceptance.sh} & Đúng run/revision/coverage; handoff redacted & Kiểm chứng theo task, không là user study \\
-Vexa E2E & Checklist consent và webhook & Bot, final transcript, HMAC/replay, dashboard & Sau consent và endpoint HTTPS \\
+Nhóm & Artefact và tiêu chí pass & Phạm vi tuyên bố \\ \midrule
+Hợp đồng mã nguồn & Test quality, unit, service và Vexa xác nhận invariant input, quality gate, parser và metric. & Không đo chất lượng sentiment/ASR. \\
+Pipeline nội bộ & \texttt{smoke-analysis-pipeline.sh}: fixture đi qua API, queue, worker và analytics; có cleanup. & Luồng application-owned với dữ liệu tổng hợp. \\
+Runtime & \texttt{verify.sh}, \texttt{runtime-status.sh}: Compose, \texttt{/ready} và dashboard reachable. & Reachability tại thời điểm kiểm tra. \\
+Dashboard UAT & Checklist UI và \texttt{dashboard-acceptance.sh}: đúng run, revision, coverage; handoff redacted. & Kiểm chứng theo task, không là user study. \\
+Vexa E2E & Checklist consent/webhook: bot, final transcript, HMAC/replay và dashboard. & Sau consent và endpoint HTTPS. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -73,15 +79,86 @@ Vexa E2E & Checklist consent và webhook & Bot, final transcript, HMAC/replay, d
 Quy trình sau là thứ tự bắt buộc để thực hiện demo hoặc UAT. Một checkpoint fail phải được xử lý trước checkpoint tiếp theo; không thay bằng claim về model.
 
 \begin{enumerate}[label=\textbf{B\arabic*.}, leftmargin=1.4cm]
-  \item \textbf{Chuẩn bị cấu hình.} Trong \texttt{source/}, chạy \texttt{./scripts/bootstrap.sh}, đặt quyền \texttt{chmod 600 settings.env}, điền secret cục bộ và kiểm \texttt{docker compose --env-file settings.env config --quiet}. Không commit secret, raw transcript hoặc token.
-  \item \textbf{Dựng hạ tầng.} Chạy \texttt{docker compose --env-file settings.env up -d --build}, rồi chạy \texttt{./scripts/runtime-status.sh} và \texttt{./scripts/verify.sh}. Pass khi API \texttt{/ready} và dashboard trả HTTP 200, PostgreSQL/Valkey healthy.
-  \item \textbf{Kiểm pipeline không dùng dữ liệu thật.} Chạy \texttt{./scripts/smoke-analysis-pipeline.sh}. Pass khi script in thông báo \texttt{PASS}; fixture phải tự cleanup. Chỉ sau bước này mới chạy E2E có consent.
-  \item \textbf{Thu nhận transcript có consent.} Tạo Google Meet test, nhận consent, spawn/admit bot và sync transcript. Chỉ tạo final analysis sau khi API có segment \texttt{is\_final=true}. Không lưu transcript thật vào Git hoặc evidence log.
+  \item \textbf{Chuẩn bị cấu hình.} Trong \texttt{source/}, chạy \texttt{bootstrap.sh}, đặt quyền \texttt{chmod 600 settings.env}, điền secret cục bộ và kiểm Compose với \texttt{config --quiet}. Không commit secret, raw transcript hoặc token.
+  \item \textbf{Dựng hạ tầng.} Chạy Compose với tuỳ chọn \texttt{--env-file settings.env up -d --build}, rồi chạy \texttt{runtime-status.sh} và \texttt{verify.sh}. Pass khi API \texttt{/ready} và dashboard trả HTTP 200, PostgreSQL/Valkey healthy.
+  \item \textbf{Kiểm pipeline không dùng dữ liệu thật.} Chạy script \texttt{smoke-\allowbreak analysis-\allowbreak pipeline.sh}. Pass khi script in thông báo \texttt{PASS}; fixture phải tự cleanup. Chỉ sau bước này mới chạy E2E có consent.
+  \item \textbf{Thu nhận transcript có consent.} Tạo hoặc vào phòng Jitsi test, nhận consent, yêu cầu bot qua Dashboard/API và xác nhận bot xuất hiện trong danh sách participant. Chỉ tạo final analysis sau khi API có segment \texttt{is\_final=true}. Không lưu transcript thật vào Git hoặc evidence log. Bước này không phải cơ chế vượt quyền phòng họp: host vẫn chịu trách nhiệm cấu hình/phê duyệt quyền của phòng.
   \item \textbf{Nghiệm thu cùng người dùng.} Mở dashboard trên loopback, nhập Application Meeting UUID nếu cần, xác nhận run/revision trước KPI, kiểm coverage/\textit{unknown}, timeline, evidence và SSE. Bấm sao chép tóm tắt, dán vào text editor và xác nhận không có transcript, speaker, token hay password.
   \item \textbf{Ghi evidence UAT.} Chạy \texttt{dashboard-acceptance.sh} với Application Meeting UUID. Pass khi script xác nhận dashboard acceptance data hoàn chỉnh. Lưu exit code, timestamp, commit/image digest và ảnh đã redaction; không đưa UUID thật hoặc output raw vào repository.
 \end{enumerate}
 
-Hướng dẫn thao tác chi tiết, biến môi trường và xử lý lỗi Vexa/transcription được giữ trong \url{docs/operations/DEV_INSTALL_RUN_TEST_DASHBOARD_GUIDE.md}. Yêu cầu chấp nhận, vai trò người dùng và checklist UAT được cụ thể hóa trong \url{docs/operations/APPLICATION_DASHBOARD_DEPLOYMENT_PLAN.md}.
+Hướng dẫn thao tác Jitsi, biến môi trường, xử lý lỗi bot/STT, yêu cầu chấp nhận và checklist UAT được lưu trong thư mục \texttt{docs/operations/} của artefact. Phần Google Meet trong tài liệu lịch sử không phải quy trình vận hành hiện hành.
+
+\section{Kết quả thực nghiệm 1: Luồng Jitsi--Vexa--Dashboard}
+\label{sec:experiment-result-01}
+
+Quan sát thứ nhất thuộc mức E1, được ghi từ bản lưu Dashboard local lúc 19:30:37 ngày 15/11/2026 (ICT). Để giảm rủi ro lộ dữ liệu họp, UUID meeting, định danh người nói, transcript nguyên văn, run ID đầy đủ, fingerprint và secret không được chép vào khóa luận. Bản lưu chỉ được dùng làm artefact đối chiếu cục bộ; các số trong Bảng~\ref{tab:experiment-result-01} được trích từ phần trạng thái và tóm tắt bàn giao đã lược bỏ transcript.
+
+\begin{table}[H]
+\centering
+\caption{Tóm tắt quan sát thực nghiệm 1 trên Dashboard local}
+\label{tab:experiment-result-01}
+\begin{tabularx}{\linewidth}{p{0.31\linewidth}X}
+\toprule
+Hạng mục & Quan sát \\ \midrule
+Phạm vi & Một cuộc họp Jitsi có bot Vexa, STT local, backend, worker và Dashboard; đây là kiểm chứng luồng ứng dụng, không phải benchmark model. \\
+Thu nhận và quality gate & Dashboard ghi nhận 24 segment; 15 segment \texttt{final} đủ điều kiện đi vào phân tích, 9 segment nhiễu được ẩn khỏi chế độ xem mặc định. \\
+Run được hiển thị & \texttt{baseline-rules-v3}, preprocessing \texttt{2026-11-stt-quality-gate-v2}, transcript revision 40. \\
+Đơn vị và coverage & 7/7/7 unit theo thứ tự predicted/accepted/total; prediction coverage và effective coverage đều là 100\%. \\
+Output được hiển thị & 0\% tích cực, 86\% trung tính và 14\% tiêu cực; với 7 unit, đây tương ứng xấp xỉ 0/6/1 unit. Chỉ số polarity là $-0.09$. \\
+Truy vết giao diện & Timeline có 4 cửa sổ thời gian; Dashboard hiển thị aggregate theo hai người nói đã được ẩn danh trong bản ghi này, evidence theo unit và tiện ích bàn giao không chứa transcript. \\
+Thời gian hiển thị & Batch inference là 0 ms cho run rules này; giá trị đó là trạng thái của một lần chạy, không phải P95, latency E2E hay kết quả tải hệ thống. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Snapshot cho thấy Dashboard đã hiển thị một chuỗi trạng thái gồm segment \texttt{final}, quality gate, analysis output có version/revision/coverage, timeline, aggregate và handoff đã lược bỏ transcript. Vì không có command, exit code hay API response đã redaction gắn với snapshot, nó không tự chứng minh quan hệ nhân quả đầy đủ của luồng E2E. Coverage 100\% trong bảng chỉ nói rằng giao diện hiển thị output cho 7/7 unit của run; nó không xác nhận độ đúng của STT, nhãn sentiment hay chất lượng dịch máy.
+
+Có một điểm cần ghi nhận minh bạch trước khi coi đây là evidence cuối cùng: vùng trạng thái và handoff của bản lưu ghi run revision 40 là \texttt{succeeded}, nhưng combobox/bảng so sánh còn hiển thị cùng run là \texttt{queued} và 0/0 unit. Mâu thuẫn trạng thái này có thể là snapshot giao diện cập nhật không đồng bộ, nhưng không được tự suy diễn. Vì vậy, kết quả này chỉ được ghi là \emph{quan sát E1 tạm thời về luồng E2E}; bước chốt bắt buộc là truy vấn lại đúng run qua API hoặc chạy \texttt{dashboard-acceptance.sh} với UUID cục bộ, lưu exit code và artifact đã redaction. Chỉ khi trạng thái được đối chiếu nhất quán mới được nâng thành evidence UAT pass.
+
+Kết quả thực nghiệm 1 không tạo ra Macro-F1, accuracy, WER/CER, P95, throughput, SLA hoặc đánh giá con người: không có ground truth, nhãn tham chiếu, mẫu lặp hay protocol user study trong quan sát này. Các metric đó chỉ được báo cáo trong một thực nghiệm riêng có corpus/consent, manifest dữ liệu và protocol tương ứng.
+
+\section{Kết quả thực nghiệm 2: Pilot hai người dùng và một bot}
+\label{sec:experiment-result-02}
+
+Quan sát thứ hai thuộc mức E1: snapshot Dashboard lúc 20:02:04 ngày 15/11/2026 (ICT) được đối chiếu với test plan nội bộ cho pilot hai người dùng và một bot. Test plan mô tả điều kiện dự kiến, không tự nó là nhật ký kết quả. Snapshot hiển thị run \texttt{baseline-rules-v3}, preprocessing \texttt{2026-11-stt-quality-gate-v2}, revision 201 và trạng thái \texttt{succeeded}. Giao diện hiển thị 116 segment, trong đó 80 segment \texttt{final} được đánh dấu đủ điều kiện và 36 segment bị ẩn với nhãn nhiễu; tỷ lệ final đủ điều kiện theo snapshot là khoảng 69.0\%. Giao diện cũng hiển thị \texttt{38/39/39} unit theo thứ tự predicted/accepted/total, với prediction coverage và effective coverage đều là 97\%. Không có Evidence ID, command, exit code hoặc log/API export đã redaction cho snapshot này; vì vậy các kết luận trong bảng chỉ là quan sát, không là UAT pass. Các định danh meeting/run, tên người nói và transcript nguyên văn tiếp tục không được đưa vào khóa luận.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.16}
+\caption{Kết quả theo tình huống của pilot hai người dùng và một bot}
+\label{tab:experiment-result-02}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.38\linewidth}>{\raggedright\arraybackslash}X}
+\toprule
+Tình huống & Bằng chứng trong snapshot & Kết luận đúng phạm vi \\ \midrule
+EXP-01: bot và STT & Ảnh Jitsi cục bộ có hai người tham gia và một bot; Dashboard hiển thị bot hoạt động, segment \texttt{final} và dữ liệu analytics. & \textbf{QUAN SÁT ĐƯỢC}: hai giao diện phù hợp với luồng bot $\rightarrow$ STT $\rightarrow$ Dashboard. Không ghi PASS vì thiếu bundle E2; chưa đo timestamp yêu cầu/vào phòng và không suy luận diarization đúng danh tính. \\
+EXP-02: cảm xúc cơ bản & Snapshot có các lượt kịch bản tích cực, buồn, tức giận, lo lắng, bất ngờ/nhẹ nhõm và trung tính; adapter tạo output cho 38/39 unit. & \textbf{PARTIAL}: xác nhận coverage vận hành. Không tính accuracy vì nhãn mục tiêu của kịch bản chi tiết hơn bốn nhãn của baseline và chưa có self-label/peer-label đã khóa theo scene. \\
+EXP-03: ngữ cảnh thời gian & Timeline có 14 cửa sổ, gồm polarity tích cực, trung tính và tiêu cực. & \textbf{PARTIAL}: Dashboard hiển thị được diễn biến theo thời gian, nhưng không có bằng chứng đủ cho cặp câu đối chứng giống hệt nhau trong hai ngữ cảnh; chưa chứng minh hiểu ngữ cảnh hoặc mỉa mai. \\
+EXP-05: tiếng Anh và Việt--Anh & Dashboard ghi 4 unit tiếng Anh và 1 unit Việt--Anh trộn. Unit trộn trả \texttt{unknown} với confidence 0\%. & \textbf{PARTIAL}: pipeline nhận và hiển thị dữ liệu đa ngôn ngữ; chất lượng STT và phân loại cảm xúc tiếng Anh/code-switching chưa được xác thực. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Trong 38 output có nhãn, Dashboard hiển thị 11\% tích cực, 71\% trung tính và 18\% tiêu cực; một unit Việt--Anh trộn được hiển thị là \texttt{unknown}, không bị gộp vào neutral. Batch inference hiển thị 0 ms cho rules baseline chỉ là trạng thái giao diện của một run, không phải latency E2E, P95 hay benchmark hiệu năng. Hình~\ref{fig:experiment-result-02-overview} và Hình~\ref{fig:experiment-result-02-timeline} là hai ảnh aggregate đã chọn để không chứa transcript, UUID hoặc định danh người nói.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{pictures/experiments/exp02_dashboard_overview.png}
+  \caption{Tổng quan aggregate của run pilot: phân bố output, coverage, polarity và version xử lý.}
+  \label{fig:experiment-result-02-overview}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{pictures/experiments/exp02_dashboard_timeline.png}
+  \caption{Timeline aggregate của run pilot; màu biểu diễn output theo cửa sổ thời gian, không phải đánh giá người nói.}
+  \label{fig:experiment-result-02-timeline}
+\end{figure}
+
+Snapshot pilot hỗ trợ quan sát rằng giao diện đã hiển thị dữ liệu sau khi bot tham gia, gồm quality gate, gom unit, output adapter, coverage/\texttt{unknown} và timeline. Nó chưa đủ để xác nhận độc lập một E2E UAT pass trên Jitsi vì thiếu bundle E2. Việc giao diện ẩn 36 segment với nhãn nhiễu và hiển thị một unit trộn ngôn ngữ không có prediction cho thấy chất lượng STT, segmentation và multilingual routing vẫn là rủi ro cần đo riêng. Các ảnh transcript/evidence theo đơn vị và ảnh Jitsi có nội dung hoặc định danh participant không được đưa nguyên ảnh vào khóa luận.
+
+Do không có nhãn tham chiếu đã khóa, reference transcript hoặc lặp độc lập, pilot không chứng minh accuracy/Macro-F1, WER/CER, độ đúng diarization, hiểu ngữ cảnh hay hiệu quả đa ngôn ngữ. Đợt đo tiếp theo cần tách scene/Meeting ID, ghi timestamp bot join và STT, khóa self-label/peer-label trước khi xem prediction, rồi tạo evidence bundle đã redaction cho từng điều kiện.
 
 \section{Kịch bản lỗi và giới hạn triển khai}
 
@@ -91,7 +168,7 @@ Một UAT chưa là user study. Nếu sau này đo trải nghiệm người dùn
 
 \section{Biên bản bằng chứng và điều kiện kết luận}
 
-Mỗi run kiểm chứng có Evidence ID duy nhất, ví dụ \texttt{EVID-20261026-UAT01}. Bundle cục bộ tại \path{source/evidence/runs/<Evidence-ID>/} gồm command, exit code, stdout/stderr, environment redaction-safe, manifest và ảnh UAT đã che dữ liệu. Có thể dùng \texttt{capture-evidence.sh} cho unit/integration; UAT dashboard ghi bổ sung output \texttt{dashboard-acceptance.sh}. Nếu không có bundle đầy đủ, báo cáo phải ghi \emph{chưa đo} thay vì điền kết quả.
+Mỗi run kiểm chứng có Evidence ID duy nhất, ví dụ \texttt{EVID-20261026-UAT01}. Bundle cục bộ trong kho evidence của dự án gồm command, exit code, stdout/stderr, environment redaction-safe, manifest và ảnh UAT đã che dữ liệu. Có thể dùng \texttt{capture-evidence.sh} cho unit/integration; UAT dashboard ghi bổ sung output \texttt{dashboard-acceptance.sh}. Nếu không có bundle đầy đủ, báo cáo phải ghi \emph{chưa đo} thay vì điền kết quả.
 
 \begin{table}[H]
 \centering
@@ -101,7 +178,7 @@ Mỗi run kiểm chứng có Evidence ID duy nhất, ví dụ \texttt{EVID-20261
 \toprule
 Trường & Nội dung & Nguồn \\ \midrule
 Định danh & Evidence ID, thời gian ICT, người chạy, PASS/FAIL & \texttt{manifest.md} \\
-Phiên bản/môi trường & Git commit, Docker/Compose, image digest nếu có, OS/CPU & \texttt{environment.txt} \\
+Phiên bản/môi trường & Git commit, Docker/Compose, image digest nếu có, OS/CPU & \texttt{environment.\allowbreak txt} \\
 Lệnh/kết quả & Command đầy đủ, exit code, stdout/stderr & \texttt{commands.txt}, \texttt{exit-code.txt}, \texttt{stdout.log} \\
 Dữ liệu/quyền riêng tư & Fixture synthetic hoặc consent áp dụng; redaction đã thực hiện & \texttt{manifest.md} \\
 Truy vết dashboard & Run ID, version, preprocessing, revision, coverage, batch duration & API result đã redaction hoặc output UAT \\
@@ -111,4 +188,4 @@ Giới hạn/failure & Điểm fail, recovery, claim được phép nêu & \text
 \end{tabularx}
 \end{table}
 
-Khi B1--B3 pass, kết luận được phép nêu là deployment nội bộ và pipeline synthetic hoạt động theo hợp đồng đã mô tả. Khi B4--B6 có consent và evidence đầy đủ, có thể nêu thêm rằng một luồng người dùng Google Meet đã đi đến dashboard truy vết được trên môi trường đã ghi nhận. Không suy rộng kết luận thành chất lượng ASR/model, hiệu năng tải, SLA, khả năng đa nền tảng hay đánh giá con người.
+Khi B1--B3 pass, kết luận được phép nêu là deployment nội bộ và pipeline synthetic hoạt động theo hợp đồng đã mô tả. Khi B4--B6 có consent và evidence đầy đủ, có thể nêu thêm rằng một luồng người dùng Jitsi đã đi đến dashboard truy vết được trên môi trường đã ghi nhận. Không suy rộng kết luận thành chất lượng ASR/model, hiệu năng tải, SLA, khả năng đa nền tảng hay đánh giá con người.

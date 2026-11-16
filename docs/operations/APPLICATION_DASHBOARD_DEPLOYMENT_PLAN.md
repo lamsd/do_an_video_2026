@@ -1,5 +1,10 @@
 # Kế hoạch nghiệm thu ứng dụng và Dashboard
 
+> **Phạm vi lịch sử:** các bước Google Meet trong tài liệu này không phải đường
+> vận hành hiện tại. Dashboard hiện nhận URL Jitsi; dùng
+> [checklist Jitsi E2E](JITSI_E2E_VERIFICATION_CHECKLIST.md) cho bot/transcript và
+> chỉ dùng tài liệu này cho nguyên tắc UAT/dashboard còn phù hợp.
+
 Mục tiêu của giai đoạn này là chứng minh người dùng có thể vận hành hệ thống Meeting Intelligence một cách truy vết được: mở đúng meeting, xem đúng analysis run, hiểu coverage/giới hạn, kiểm evidence và bàn giao trạng thái kỹ thuật an toàn. Đây **không** là giai đoạn xây model, gán nhãn dữ liệu, hay công bố accuracy/F1/WER.
 
 Phạm vi mã nguồn duy nhất là `source/compose.yaml`, `source/src/backend` và `source/src/dashboard`. Không dùng `source/meeting-intelligence-backend` (legacy) cho demo hay UAT.

@@ -1,7 +1,7 @@
 \chapter{Hạ Tầng và Vận Hành}
 \label{chap:infra}
 
-Hạ tầng của hệ thống được thiết kế để tách ứng dụng Meeting Intelligence khỏi nền tảng Vexa cung cấp bot và transcript. Mục tiêu là làm cho dữ liệu, secret, lifecycle và khả năng khôi phục của từng miền được nhận diện rõ ràng. Chương này mô tả topology Docker Compose đã dùng cho MVP cục bộ, quy trình vận hành và các điều kiện cần có trước khi chuyển sang môi trường production.
+Hạ tầng của hệ thống được thiết kế để tách ứng dụng Meeting Intelligence khỏi Jitsi Meet, Vexa cung cấp bot/transcript và dịch vụ STT cục bộ. Mục tiêu là làm cho dữ liệu, secret, lifecycle và khả năng khôi phục của từng miền được nhận diện rõ ràng. Chương này mô tả topology Docker Compose của MVP cục bộ, quy trình vận hành và các điều kiện cần có trước khi chuyển sang môi trường production.
 
 \section{Nguyên tắc thiết kế hạ tầng}
 Container cung cấp cách đóng gói và chạy ứng dụng có thể tái lập, nhưng đồng thời đưa vào các rủi ro về image, secret, network và isolation; các rủi ro này cần được quản trị trong toàn bộ vòng đời triển khai \cite{nist800190}. Trong dự án, các nguyên tắc hạ tầng được chọn như sau:
@@ -15,7 +15,7 @@ Container cung cấp cách đóng gói và chạy ứng dụng có thể tái l�
 
 Các nguyên tắc này không tự động tạo ra high availability, disaster recovery hoặc compliance. Chúng là điểm xuất phát để xác định những gì cần kiểm chứng khi vận hành. Hướng dẫn contingency planning nhấn mạnh backup, recovery, kiểm thử và bảo trì là một phần của thiết kế hệ thống, không phải thao tác làm sau sự cố \cite{nist80034}.
 
-\section{Topology Docker Compose đã kiểm chứng}
+\section{Topology Docker Compose của MVP}
 \subsection{Hai miền triển khai và ranh giới mạng}
 Hình~\ref{fig:infrastructure-topology} mô tả topology cục bộ. Compose của Meeting Intelligence gồm backend, worker, dashboard, PostgreSQL và Valkey. Compose Vexa meetings-only là một deployment riêng, gồm gateway, admin API, meeting API, runtime, PostgreSQL, Valkey và MinIO do Vexa sở hữu. Application Compose join external network \texttt{vexa-meetings\_vexa} để backend gọi Vexa gateway theo DNS Docker \texttt{gateway:8000}; điều này không có nghĩa các container của hai project chia sẻ volume, credential hoặc database.
 
@@ -38,7 +38,7 @@ Hình~\ref{fig:infrastructure-topology} mô tả topology cục bộ. Compose c�
   \node[store, right=of backend] (pg) {Application\\PostgreSQL volume};
   \node[store, right=of worker] (valkey) {Application\\Valkey AOF volume};
   \node[vexa, right=18mm of pg] (gateway) {Vexa gateway\\external network};
-  \node[vexa, above=of gateway] (meet) {Google Meet\\+ meeting bot};
+  \node[vexa, above=of gateway] (meet) {Jitsi Meet\\+ meeting bot};
   \node[vexa, below=of gateway] (vexadata) {Vexa PostgreSQL,\\Valkey, MinIO};
 
   \draw[flow] (browser) -- (dashboard);
@@ -47,7 +47,7 @@ Hình~\ref{fig:infrastructure-topology} mô tả topology cục bộ. Compose c�
   \draw[flow] (backend) -- (valkey);
   \draw[flow] (valkey) -- (worker);
   \draw[flow] (worker) -- (pg);
-  \draw[link] (backend) -- node[above, font=\scriptsize]{\texttt{gateway:8000}} (gateway);
+  \draw[link] (backend.north) -- ++(0,8mm) -| node[pos=0.72, above, font=\scriptsize]{\texttt{gateway:8000}} (gateway.north);
   \draw[link] (gateway) -- (meet);
   \draw[link] (gateway) -- (vexadata);
   \node[draw=primaryblue, rounded corners=3pt, fit=(dashboard)(backend)(worker)(pg)(valkey), inner sep=7mm, label={[primaryblue]above:Meeting Intelligence Compose}] {};
@@ -71,15 +71,20 @@ Dịch vụ & Vai trò & Persistence/điều kiện chạy \\ \midrule
 \texttt{backend} & FastAPI REST, SSE, webhook, reconcile & Chờ PostgreSQL và Valkey healthy; \texttt{/ready} kiểm cả hai store \\
 \texttt{worker} & Đọc stream, quality gate, adapter và aggregate & Dùng cùng database/Valkey; tự phục hồi run \texttt{queued} \\
 \texttt{dashboard} & Static frontend và Nginx reverse proxy \texttt{/api/} & Bind loopback; read-only filesystem, phụ thuộc backend healthy \\
-\texttt{postgres} & Source of truth của application & Named volume \texttt{meeting-intelligence-postgres} \\
-\texttt{valkey} & Stream/consumer group và fan-out hỗ trợ worker & Named volume \texttt{meeting-intelligence-valkey}, AOF bật \\
+\texttt{postgres} & Source of truth của application & Named volume \texttt{meeting-\allowbreak intelligence-\allowbreak postgres} \\
+\texttt{valkey} & Stream/consumer group và fan-out hỗ trợ worker & Named volume \texttt{meeting-\allowbreak intelligence-\allowbreak valkey}, AOF bật \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
+\subsection{Boundary Jitsi và transcription}
+Trong demo/UAT hiện hành, phòng Jitsi là nguồn media bên ngoài hai Compose project; Vexa gửi bot theo URL phòng, còn dịch vụ STT local được Vexa gọi để tạo segment. Kiến trúc Jitsi tách WebRTC application, Videobridge, Jicofo và Prosody; application của đề tài không cài lại hay sao chép database của các thành phần này \cite{jitsiArchitecture2026}. Nếu chuyển sang tự host Jitsi, HTTPS, certificate, DNS, port và vận hành của Jitsi trở thành một deployment độc lập theo hướng dẫn Docker của Jitsi \cite{jitsiDocker2026}; không nên gộp các yêu cầu đó vào compose của application mà không có review bảo mật/network.
+
+STT local là dependency runtime riêng. Cấu hình CPU hiện tại dùng faster-whisper/CTranslate2 với \texttt{int8} và VAD như một lựa chọn vận hành; đó không là benchmark chất lượng transcript \cite{fasterwhisper2026}. Health check STT phải được kiểm tra cùng Vexa trước E2E; transcript rỗng hoặc bị quality gate loại là trạng thái quan sát được, không được thay bằng text giả để làm pipeline có vẻ thành công.
+
 \section{Cấu hình, secret và network}
 \subsection{Một nguồn cấu hình runtime}
-\texttt{settings.env.example} là template được commit; \texttt{settings.env} là file cục bộ duy nhất cho cả application và Vexa self-host. Nhóm cấu hình ứng dụng gồm port, URL PostgreSQL, URL Valkey, model/preprocessing version, Vexa API base/key và webhook secret. Nhóm cấu hình Vexa gồm database, MinIO, control-plane secret, token transcription và network. Các credential của application PostgreSQL và Vexa PostgreSQL phải độc lập, không dùng cùng password hoặc volume.
+Tệp mẫu cấu hình \texttt{settings.env.\allowbreak example} được commit; \texttt{settings.env} là file cục bộ duy nhất cho cả application và Vexa self-host. Nhóm cấu hình ứng dụng gồm port, URL PostgreSQL, URL Valkey, model/preprocessing version, Vexa API base/key và webhook secret. Nhóm cấu hình Vexa/STT gồm database, MinIO, control-plane secret, endpoint/token transcription và network. Các credential của application PostgreSQL và Vexa PostgreSQL phải độc lập, không dùng cùng password hoặc volume.
 
 Secret không được đưa vào image, dashboard, repository, log hay artifact của luận văn. Trong MVP local, file cấu hình cần quyền đọc hạn chế; khi production cần thay bằng secret manager, rotation, phân quyền runtime tối thiểu và quy trình thu hồi khi lộ lọt. Placeholder như \texttt{CHANGE\_ME} không phải secret hợp lệ. API key Vexa chỉ cấp scope bot/transcript tối thiểu cần thiết và chỉ backend đọc.
 
@@ -89,7 +94,7 @@ Dashboard và backend bind \texttt{127.0.0.1} trên host ở các port mặc đ�
 \section{Quy trình build, khởi động và kiểm chứng}
 Trình tự vận hành được tách thành Vexa và application. Trước hết, kiểm tra Docker Engine/Compose, tạo \texttt{settings.env}, cấu hình transcription và khởi động Vexa meetings-only. Sau khi Vexa gateway healthy, tạo API key đúng scope và đặt vào cấu hình application. Tiếp theo, \texttt{docker compose --env-file settings.env config} kiểm tra biến required/topology trước khi \texttt{up -d --build} tạo stack application.
 
-Sau khởi động, script \texttt{verify.sh} kiểm tra \texttt{docker compose ps}, \texttt{/ready} và dashboard trên loopback. Script \texttt{runtime-status.sh} tạo biên bản read-only về container, port và readiness mà không in credential, transcript hoặc environment của container. Smoke pipeline dùng fixture transcript tổng hợp, chờ final analysis rồi xóa fixture; nó kiểm tra API--queue--worker nhưng không chứng minh chất lượng ASR hoặc sentiment. Các bước nghiệm thu đầy đủ cần bao gồm unit test, integration database/queue, dashboard SSE, Vexa contract, webhook valid/tampered/replay và E2E có consent.
+Sau khởi động, script \texttt{verify.sh} kiểm tra \texttt{docker compose ps}, \texttt{/ready} và dashboard trên loopback; STT service phải trả health trước khi tạo bot Jitsi. Script \texttt{runtime-status.sh} tạo biên bản read-only về container, port và readiness mà không in credential, transcript hoặc environment của container. Smoke pipeline dùng fixture transcript tổng hợp, chờ final analysis rồi xóa fixture; nó kiểm tra API--queue--worker nhưng không chứng minh chất lượng ASR hoặc sentiment. Các bước nghiệm thu đầy đủ cần bao gồm unit test, integration database/queue, dashboard SSE, Vexa contract, webhook valid/tampered/replay và E2E Jitsi có consent.
 
 Khi dừng stack thông thường, \texttt{docker compose down} giữ named volumes. Không dùng \texttt{down -v} cho application vì sẽ xóa PostgreSQL và Valkey volume. Việc xóa volume Vexa chỉ có thể được cân nhắc sau khi xác nhận target, backup và không còn cần database/MinIO/token của Vexa; nó là thao tác phá hủy, không phải bước khắc phục mặc định.
 
@@ -101,4 +106,4 @@ Sao lưu phải tách tối thiểu thành application PostgreSQL, application V
 \section{Kiến trúc vận hành mở rộng và giới hạn}
 Đối với production, một kiến trúc mục tiêu có thể bổ sung TLS ingress, authentication/authorization, secret manager, image digest pinning, CI/CD có kiểm thử, backup/restore drill, structured log/metric/trace, policy retention/delete và monitoring. Worker có thể được scale độc lập sau khi đã đo throughput, queue lag, database pool và tài nguyên inference. Model artifact/GPU/MLflow chỉ được thêm khi có artifact, model registry và benchmark; không nên thêm GPU vào Compose chỉ để dự phòng.
 
-Kubernetes, multi-region, active--active, HA database, autoscaling, cloud managed service, TimescaleDB, service mesh và SLO/RTO/RPO định lượng không thuộc implementation đã kiểm chứng. Tương tự, Zoom, Teams, Jitsi Meet, direct Vexa WebSocket và auto-alert cần contract, consent, capacity plan, security review và evaluation riêng. Sự phân biệt giữa topology local đã chạy và kiến trúc mục tiêu giúp tránh biến roadmap thành kết quả nghiên cứu.
+Kubernetes, multi-region, active--active, HA database, autoscaling, cloud managed service, TimescaleDB, service mesh và SLO/RTO/RPO định lượng không thuộc implementation MVP. Tương tự, Google Meet, Zoom, Teams, direct Vexa WebSocket và auto-alert cần contract, consent, capacity plan, security review và evaluation riêng. Sự phân biệt giữa topology local của MVP và kiến trúc mục tiêu giúp tránh biến roadmap thành kết quả nghiên cứu.

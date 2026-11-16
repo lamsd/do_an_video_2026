@@ -1,5 +1,10 @@
 # Backend cho transcript realtime và phân tích meeting
 
+> **Thiết kế lịch sử:** tài liệu này còn mô tả Google Meet/Chrome Extension. Nó
+> được giữ lại để truy vết quyết định cũ, không phải kiến trúc runtime hiện hành.
+> Dùng [JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md](JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md)
+> và [MEETING_INTELLIGENCE_ARCHITECTURE_AND_MODULES.md](MEETING_INTELLIGENCE_ARCHITECTURE_AND_MODULES.md) cho implementation/UAT mới.
+
 ## Mục tiêu
 
 Backend là lớp duy nhất giữ Vexa API key, nhận transcript từ Vexa, lưu bền vững, phát dữ liệu cho Chrome Extension/UI và kích hoạt phân tích ở hai thời điểm:

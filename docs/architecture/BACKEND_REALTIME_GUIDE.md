@@ -1,5 +1,11 @@
 # Backend Meeting Intelligence: thiết kế và hướng dẫn triển khai
 
+> **Tài liệu lịch sử (không dùng để vận hành):** nội dung bên dưới mô tả kế hoạch
+> Google Meet/Chrome Extension trước khi chuyển runtime sang Jitsi Meet + Vexa +
+> STT local. Dùng [kiến trúc runtime hiện hành](JITSI_VEXA_STT_RUNTIME_ARCHITECTURE.md)
+> và [checklist Jitsi E2E](../operations/JITSI_E2E_VERIFICATION_CHECKLIST.md) cho
+> build/UAT mới. Các mục tiêu latency trong tài liệu này chưa phải số liệu đo được.
+
 Tài liệu này gộp kiến trúc và kế hoạch triển khai backend nhận transcript từ Vexa để phục vụ hiển thị **realtime**, **near-realtime** và **phân tích sau khi meeting kết thúc**.
 
 Phạm vi MVP là Google Meet + Vexa self-hosted + STT local GPU hiện có. Sau khi luồng này pass mới mở rộng Jitsi/Teams/Zoom.

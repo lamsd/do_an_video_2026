@@ -1,5 +1,11 @@
 # Hướng dẫn DEV duy nhất: Cài đặt → Chạy → Test → Dashboard
 
+> **Tài liệu lịch sử:** hướng dẫn dưới đây còn mô tả Google Meet. Runtime demo/UAT
+> hiện hành sử dụng Jitsi Meet + Vexa + STT local; dùng
+> [SETTINGS_AND_RUN_GUIDE.md](SETTINGS_AND_RUN_GUIDE.md) và
+> [JITSI_E2E_VERIFICATION_CHECKLIST.md](JITSI_E2E_VERIFICATION_CHECKLIST.md)
+> thay cho phần E2E của tài liệu này.
+
 > Mục tiêu: dựng toàn bộ Meeting Intelligence trên môi trường DEV bằng Terminal
 > và Docker Compose, kiểm tra pipeline, chạy Google Meet có consent và xem kết quả
 > tự động trên Dashboard.
