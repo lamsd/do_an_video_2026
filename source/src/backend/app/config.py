@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     analysis_consumer_group: str = "sentiment-workers"
     analysis_debounce_seconds: int = Field(default=20, ge=1, le=300)
     analysis_max_retries: int = Field(default=5, ge=0, le=20)
+    # A worker that dies after reading a Valkey Stream message leaves it pending.
+    # A replacement worker claims it only after this lease, avoiding duplicate
+    # work for normally running jobs while still making restart recovery bounded.
+    analysis_reclaim_idle_seconds: int = Field(default=60, ge=5, le=3600)
     # The adapter is explicit so a test/demonstration never silently runs a
     # different classifier under the same model version.
     classifier_adapter: str = "rules"

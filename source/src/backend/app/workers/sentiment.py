@@ -131,6 +131,52 @@ async def recover_queued_runs(classifier: SentimentClassifier) -> int:
     return len(run_ids)
 
 
+async def process_stream_entries(
+    redis: Redis, entries: list[tuple[str, dict[str, str | bytes]]], classifier: SentimentClassifier
+) -> int:
+    """Process then acknowledge entries; transient failures remain pending.
+
+    A pending entry is intentional after a worker/database interruption: a
+    replacement worker will claim it. Malformed messages cannot become useful
+    later, so they are acknowledged after logging to prevent a poison-message
+    loop.
+    """
+    settings = get_settings()
+    completed = 0
+    for message_id, fields in entries:
+        try:
+            run_id = UUID(decode_run_id(fields))
+        except (TypeError, ValueError):
+            log.error("discarding malformed analysis stream message %s", message_id)
+            await redis.xack(settings.analysis_stream, settings.analysis_consumer_group, message_id)
+            continue
+        try:
+            await process(run_id, classifier)
+        except Exception:
+            log.exception("analysis worker failed for message %s; leaving it pending", message_id)
+            continue
+        await redis.xack(settings.analysis_stream, settings.analysis_consumer_group, message_id)
+        completed += 1
+    return completed
+
+
+async def reclaim_pending_entries(redis: Redis, classifier: SentimentClassifier, consumer: str) -> int:
+    """Claim jobs abandoned by an interrupted consumer, then process them once."""
+    settings = get_settings()
+    claimed = await redis.xautoclaim(
+        settings.analysis_stream,
+        settings.analysis_consumer_group,
+        consumer,
+        min_idle_time=settings.analysis_reclaim_idle_seconds * 1000,
+        start_id="0-0",
+        count=20,
+    )
+    # Redis/Valkey 7+ returns (next_start_id, entries, deleted_ids). Only the
+    # entries are relevant here; a later idle loop continues the bounded scan.
+    entries = claimed[1] if len(claimed) > 1 else []
+    return await process_stream_entries(redis, entries, classifier)
+
+
 async def run() -> None:
     settings = get_settings()
     classifier = configured_classifier()
@@ -151,18 +197,16 @@ async def run() -> None:
             raise
     consumer = "worker-1"
     try:
+        # This covers a container restart before it starts consuming new work.
+        await reclaim_pending_entries(redis, classifier, consumer)
         while True:
             messages = await redis.xreadgroup(
                 settings.analysis_consumer_group, consumer, {settings.analysis_stream: ">"}, count=4, block=5000
             )
             for _, entries in messages:
-                for message_id, fields in entries:
-                    try:
-                        await process(UUID(decode_run_id(fields)), classifier)
-                        await redis.xack(settings.analysis_stream, settings.analysis_consumer_group, message_id)
-                    except Exception:
-                        log.exception("analysis worker failed for message %s", message_id)
+                await process_stream_entries(redis, entries, classifier)
             if not messages:
+                await reclaim_pending_entries(redis, classifier, consumer)
                 await recover_queued_runs(classifier)
     finally:
         await redis.aclose()

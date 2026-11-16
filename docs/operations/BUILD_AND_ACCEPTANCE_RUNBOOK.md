@@ -125,8 +125,8 @@ Script tạo dữ liệu tổng hợp tạm thời, kiểm API → queue → wor
 
 ### P7 — Resilience, evidence và luận văn
 
-1. Test sync lặp, revision/retract, worker restart và SSE reconnect.
-2. Bổ sung pending-message reclaim cho Redis Stream trước khi claim độ bền worker.
+1. `smoke-analysis-pipeline.sh` kiểm sync lặp, revision/retract, owner isolation và SSE reconnect bằng fixture synthetic.
+2. Worker dùng `XAUTOCLAIM` với idle lease cho pending message; chạy forced-restart test riêng trước khi claim độ bền vận hành.
 3. Lưu ảnh/log đã che secret/PII: health, Compose, API response, dashboard và protocol môi trường.
 4. Chỉ báo cáo chỉ số từ log thật, kèm cỡ mẫu và môi trường chạy.
 
@@ -138,7 +138,8 @@ Script tạo dữ liệu tổng hợp tạm thời, kiểm API → queue → wor
 - P1–P3: pass trên runtime hiện tại.
 - P4: pass bằng synthetic smoke test, fixture đã cleanup.
 - P5: đang chờ quyết định dừng legacy.
-- P6–P7: chưa thực hiện; là đường găng để nghiệm thu khóa luận.
+- P6: chưa thực hiện; là đường găng cho E2E Jitsi có consent.
+- P7: smoke synthetic và pending reclaim đã có; forced restart, queue lag/health và evidence E2E vẫn chưa thực hiện.
 
 ## 5. Không làm trong giai đoạn build MVP
 

@@ -89,11 +89,11 @@ flowchart LR
 | Webhook receiver | `/v1/webhooks/vexa` | Xác minh HMAC/timestamp, dedupe event, trigger finalize | Vexa signed event | `incoming_webhooks`, final analysis run | Cần public HTTPS URL; hiện runtime chưa cấu hình URL webhook. |
 | Application database | PostgreSQL application | Source of truth: meeting, transcript, run, unit, prediction, aggregate, outbox | API/worker writes | Dữ liệu audit và Dashboard query | Cần retention/delete, backup/restore drill. |
 | Analysis orchestration | `api/analytics.py`, `repositories/analysis.py` | Tạo run idempotent theo meeting/revision/model, enqueue job | Meeting revision, model config | `analysis_runs`, Valkey message | Cần retry/requeue khi run failed. |
-| Queue | Valkey Stream | Truyền `run_id` từ API sang worker | Analysis job | Consumer message | Không phải source of truth; cần reclaim pending message/monitor lag. |
+| Queue | Valkey Stream | Truyền `run_id` từ API sang worker | Analysis job | Consumer message | Không phải source of truth; `XAUTOCLAIM` reclaim pending message sau idle lease, vẫn cần monitor lag. |
 | Sentiment worker | `workers/sentiment.py` | Build unit, quality-gate, predict, aggregate, phát outbox | Job + transcript final | Unit, prediction, windows, metrics | Cần healthcheck riêng và retry policy hoàn chỉnh. |
 | Quality gate | `analysis/quality.py`, `analysis/units.py` | Chuẩn hoá text, lọc segment ngắn/noise/hallucination, gộp unit | Transcript segment final | Accepted/rejected analysis unit | Chỉ là hygiene rule, không chứng minh model accuracy. |
 | Classifier adapter | `analysis/classifier.py` | Chạy `rules` hoặc TF-IDF Logistic Regression artifact đã hash | Analysis unit tiếng Việt | Label, confidence, probabilities | `rules` là baseline, không dùng để claim chất lượng nghiệp vụ. |
-| Realtime refresh | SSE `/events` + outbox | Báo Dashboard tải lại dữ liệu khi transcript/analysis đổi | Outbox event | SSE event signal | Cần cursor/retention/scale design trước production. |
+| Realtime refresh | SSE `/events` + outbox | Báo Dashboard tải lại dữ liệu khi transcript/analysis đổi | Outbox event | SSE event signal | Resume theo `Last-Event-ID`; vẫn cần retention/scale design trước production. |
 | Vexa control plane | Vexa Gateway, Meeting API, DB, MinIO | Bot lifecycle, transcript provider, object/control-plane data | Jitsi Meet/STT local | Transcript snapshot, lifecycle event | API parser còn tương thích Google Meet lịch sử; backup domain độc lập với application DB. |
 | Transcription | STT service | Biến audio thành transcript segment; source gate bỏ result ngắn/noise/media-outro | Audio capture | Text, time, language, speaker metadata | CPU `small`/INT8 ưu tiên continuity; không claim WER hoặc dịch máy. |
 | Operator configuration | `operator-runner` | Cập nhật allow-list settings và recreate service local | Local operator config | Runtime config mới | **Development only**; không chạy ở production. |
@@ -141,10 +141,10 @@ flowchart TB
 | P0 | Transcription + Vexa integration | Theo dõi STT source gate, chạy E2E Jitsi có consent theo protocol và giữ evidence đã redaction. |
 | P0 | Transcript reconciler | Xử lý retraction và absolute/relative timestamp; thêm contract test. |
 | P0 | Identity/authorization | JWT/session, workspace-role, tenant isolation test. |
-| P1 | Queue + worker | Retry, pending reclaim, heartbeat/healthcheck, queue lag alert. |
+| P1 | Queue + worker | Retry policy, heartbeat/healthcheck và queue lag alert; pending reclaim đã có nhưng cần forced-restart evidence. |
 | P1 | Data lifecycle | Retention, delete workflow, backup/restore drill. |
 | P1 | Model | Corpus meeting đã consent + benchmark hợp lệ trước khi diễn giải sentiment. |
-| P2 | Dashboard/SSE | Cursor event, outbox retention, scale/load test. |
+| P2 | Dashboard/SSE | Outbox retention và scale/load test; resume cursor đã có. |
 | P2 | Operator runner | Tách dev-only compose, loại Docker socket khỏi production. |
 
 ## 6. Quy tắc kiến trúc không được vi phạm

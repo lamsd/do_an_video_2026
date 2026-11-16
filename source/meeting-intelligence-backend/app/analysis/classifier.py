@@ -13,7 +13,7 @@ class SentimentClassifier(Protocol):
 class RuleBaselineClassifier:
     """Deterministic safety baseline; replace through the SentimentClassifier protocol."""
 
-    model_version = "baseline-rules-v3"
+    model_version = "baseline-rules-v1"
     positive_markers = ("yêu", "thương", "cảm ơn", "tốt", "vui", "happy", "love")
     negative_markers = ("vang", "không được", "lỗi", "khó", "tệ", "bực", "frustrat")
 

@@ -93,8 +93,9 @@ docker compose --env-file settings.env restart backend worker
 
 ## Task 6 — Độ bền trước khi nộp
 
-- [ ] Bổ sung test integration cho password/readiness, idempotency analysis run, revision/retract và Redis pending-message recovery.
-- [ ] Bổ sung reclaim cho Redis Stream pending messages (`XAUTOCLAIM` hoặc chiến lược tương đương) để worker crash không làm kẹt job `running`.
+- [x] Bổ sung fixture synthetic kiểm idempotency analysis run, revision/retract, owner isolation và SSE reconnect.
+- [x] Bổ sung reclaim Redis Stream pending message bằng `XAUTOCLAIM`; unit test xác minh claim/ack và giữ transient failure ở trạng thái pending.
+- [ ] Chạy forced-restart evidence trên worker thật, đồng thời đo queue lag/healthcheck riêng.
 - [ ] Commit riêng thay đổi Vexa đã rút gọn, kèm kiểm thử/ghi chú phạm vi.
 
 **Tiêu chí đạt:** các claim trong luận văn có test/log E2E tương ứng.

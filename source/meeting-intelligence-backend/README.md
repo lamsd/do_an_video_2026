@@ -26,7 +26,7 @@ backend (FastAPI) → PostgreSQL + Valkey Stream → worker (sentiment pipeline)
 - `app/workers/sentiment.py`: long-running Stream consumer, intentionally outside FastAPI.
 - `app/api/analytics.py`: protected analytics/evidence endpoints.
 
-The current classifier is a deterministic rule baseline (`baseline-rules-v3`) to validate the pipeline. It is deliberately not presented as a trained PhoBERT model. A PhoBERT adapter can replace it through `SentimentClassifier` after a versioned artifact and evaluation report exist. `unknown` is an abstention, never a synonym for `neutral`.
+The current classifier is a deterministic rule baseline (`baseline-rules-v1`) to validate the pipeline. It is deliberately not presented as a trained PhoBERT model. A PhoBERT adapter can replace it through `SentimentClassifier` after a versioned artifact and evaluation report exist.
 
 ### Run locally
 

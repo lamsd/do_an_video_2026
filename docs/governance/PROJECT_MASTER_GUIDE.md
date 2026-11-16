@@ -186,8 +186,8 @@ curl --fail --show-error -X POST 'http://127.0.0.1:8089/v1/meetings/<MEETING_ID>
 ## 7. Việc cần hoàn thiện trước khi nộp
 
 1. Chạy E2E thật và lưu evidence có timestamp.
-2. Test retry, sync lặp, revision/retract, worker restart, SSE reconnect.
-3. Thêm reclaim cho Redis Stream pending messages để worker crash không kẹt job `running`.
+2. Đã có synthetic test cho sync lặp, revision/retract, owner isolation và SSE reconnect; còn cần forced worker restart và retry/queue-lag evidence.
+3. Worker đã reclaim Redis Stream pending message qua `XAUTOCLAIM`; chưa coi đây là bằng chứng operational trước forced-restart run.
 4. Bổ sung test integration cho webhook, idempotency và authorization.
 5. Đồng bộ luận văn với implementation: baseline-rules, quality gate, limitation và kết quả đo thật.
 6. Commit riêng thay đổi rút gọn trong Vexa sau khi kiểm thử.

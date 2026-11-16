@@ -2,10 +2,13 @@
 
 | Command | Exit code | Result |
 |---|---:|---|
-| `.venv/bin/python -m pytest -q` | 0 | 7 passed in 0.24s |
-| `.venv/bin/ruff check app tests tools` | 0 | All checks passed |
-| `tools/evaluate_sentiment.py ...` | 0 | Smoke test wrote JSON result |
+| `cd source/src/backend && .venv/bin/python -m pytest -q` | 0 | 46 passed |
+| `cd source/src/backend && .venv/bin/ruff check app tests` | 0 | All checks passed |
+| `cd source && sh -n scripts/smoke-analysis-pipeline.sh` | 0 | Shell syntax valid |
+| `cd source && ./scripts/verify.sh` | 0 | Backend and Dashboard reachable |
+| `cd source && ./scripts/smoke-analysis-pipeline.sh` | 0 | Synthetic API → Valkey → worker checks passed |
 
-Phạm vi unit test hiện gồm chuẩn hóa/quality gate, ghép unit, classifier contract và
-ngữ nghĩa abstention `unknown`. Không có Docker/PostgreSQL/Valkey/Jitsi đang chạy
-trong lần này; mọi assertion E2E vì thế là **NOT RUN**, không phải PASS.
+Phạm vi mới gồm quality gate, ghép unit, classifier contract, coverage, immutable
+snapshot, Valkey pending-job reclaim và SSE cursor. Smoke test dùng PostgreSQL,
+Valkey và worker đang chạy, tạo rồi xóa một fixture synthetic. Đây không phải Jitsi
+E2E, forced worker crash, đánh giá ASR hoặc đánh giá chất lượng sentiment.

@@ -25,9 +25,9 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .analysis.quality import evaluate_segment
 from .api.analytics import router as analytics_router
 from .api.operator_settings import router as operator_settings_router
-from .analysis.quality import evaluate_segment
 from .auth import owner
 from .config import get_settings
 from .db import SessionLocal, engine, session
@@ -37,6 +37,7 @@ from .repositories.analysis import get_or_create_run
 from .schema_compat import apply_compatibility_upgrades
 from .schemas import MeetingResponse, SegmentResponse, StartMeetingRequest
 from .service import get_owned_meeting, reconcile
+from .sse import EventCursor, cursor_for, event_query
 from .vexa import VexaClient, VexaError, parse_meeting_url
 
 log = logging.getLogger(__name__)
@@ -284,6 +285,7 @@ async def stop_meeting(
 async def events(
     meeting_id: UUID,
     request: Request,
+    last_event_id: str = Header(default=""),
     db: AsyncSession = Depends(session),
     user: str = Depends(owner),
 ):
@@ -293,21 +295,29 @@ async def events(
         raise HTTPException(404, str(exc)) from exc
 
     async def stream():
-        sent_ids: set[str] = set()
+        cursor: EventCursor | None = None
+        if last_event_id:
+            try:
+                requested_id = UUID(last_event_id)
+            except ValueError:
+                log.warning("ignoring invalid Last-Event-ID for meeting %s", meeting_id)
+            else:
+                async with SessionLocal() as event_db:
+                    previous = await event_db.scalar(
+                        select(OutboxEvent).where(
+                            OutboxEvent.meeting_id == meeting_id,
+                            OutboxEvent.id == requested_id,
+                        )
+                    )
+                if previous is not None:
+                    cursor = cursor_for(previous)
         while not await request.is_disconnected():
             async with SessionLocal() as event_db:
                 rows = (
-                    await event_db.scalars(
-                        select(OutboxEvent)
-                        .where(OutboxEvent.meeting_id == meeting_id)
-                        .order_by(OutboxEvent.created_at)
-                    )
+                    await event_db.scalars(event_query(meeting_id, cursor))
                 ).all()
             for row in rows:
-                event_id = str(row.id)
-                if event_id in sent_ids:
-                    continue
-                sent_ids.add(event_id)
+                cursor = cursor_for(row)
                 body = json.dumps(
                     {
                         "event_id": str(row.id),
@@ -316,7 +326,7 @@ async def events(
                         "data": row.payload,
                     }
                 )
-                yield f"id: {event_id}\nevent: {row.event_type}\ndata: {body}\n\n"
+                yield f"id: {row.id}\nevent: {row.event_type}\ndata: {body}\n\n"
             yield ": keepalive\n\n"
             await asyncio.sleep(1)
 
